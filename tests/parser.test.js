@@ -1248,656 +1248,656 @@ describe("RiX Parser", () => {
         },
       ]);
     });
-});
+  });
 
-// Test postfix operators
-describe('Postfix operators', () => {
+  // Test postfix operators
+  describe('Postfix operators', () => {
     describe('AT operator (@)', () => {
-        test('simple AT operation', () => {
-            const result = parseCode('PI@(1e-6);');
-            expect(stripMetadata(result)).toEqual([{
-                type: 'Statement',
-                expression: {
-                    type: 'At',
-                    target: {
-                        type: 'SystemIdentifier',
-                        name: 'PI',
-                        systemInfo: {
-                            type: 'constant',
-                            value: 3.141592653589793
-                        }
-                    },
-                    arg: {
-                        type: 'Number',
-                        value: '1e-6'
-                    }
-                }
-            }]);
-        });
+      test('simple AT operation', () => {
+        const result = parseCode('PI@(1E-6);');
+        expect(stripMetadata(result)).toEqual([{
+          type: 'Statement',
+          expression: {
+            type: 'At',
+            target: {
+              type: 'SystemIdentifier',
+              name: 'PI',
+              systemInfo: {
+                type: 'constant',
+                value: 3.141592653589793
+              }
+            },
+            arg: {
+              type: 'Number',
+              value: '1E-6'
+            }
+          }
+        }]);
+      });
 
-        test('AT operation on user identifier', () => {
-            const result = parseCode('x@(epsilon);');
-            expect(stripMetadata(result)).toEqual([{
-                type: 'Statement',
-                expression: {
-                    type: 'At',
-                    target: {
-                        type: 'UserIdentifier',
-                        name: 'x'
-                    },
-                    arg: {
-                        type: 'UserIdentifier',
-                        name: 'epsilon'
-                    }
-                }
-            }]);
-        });
+      test('AT operation on user identifier', () => {
+        const result = parseCode('x@(epsilon);');
+        expect(stripMetadata(result)).toEqual([{
+          type: 'Statement',
+          expression: {
+            type: 'At',
+            target: {
+              type: 'UserIdentifier',
+              name: 'x'
+            },
+            arg: {
+              type: 'UserIdentifier',
+              name: 'epsilon'
+            }
+          }
+        }]);
+      });
 
-        test('AT operation on expression', () => {
-            const result = parseCode('(1/3)@(1e-10);');
-            expect(stripMetadata(result)).toEqual([{
-                type: 'Statement',
-                expression: {
-                    type: 'At',
-                    target: {
-                        type: 'Grouping',
-                        expression: {
-                            type: 'Number',
-                            value: '1/3'
-                        }
-                    },
-                    arg: {
-                        type: 'Number',
-                        value: '1e-10'
-                    }
-                }
-            }]);
-        });
+      test('AT operation on expression', () => {
+        const result = parseCode('(1/3)@(1E-10);');
+        expect(stripMetadata(result)).toEqual([{
+          type: 'Statement',
+          expression: {
+            type: 'At',
+            target: {
+              type: 'Grouping',
+              expression: {
+                type: 'Number',
+                value: '1/3'
+              }
+            },
+            arg: {
+              type: 'Number',
+              value: '1E-10'
+            }
+          }
+        }]);
+      });
 
-        test('chained AT operations', () => {
-            const result = parseCode('PI@(1e-3)@(5e-4);');
-            expect(stripMetadata(result)).toEqual([{
-                type: 'Statement',
-                expression: {
-                    type: 'At',
-                    target: {
-                        type: 'At',
-                        target: {
-                            type: 'SystemIdentifier',
-                            name: 'PI',
-                            systemInfo: {
-                                type: 'constant',
-                                value: 3.141592653589793
-                            }
-                        },
-                        arg: {
-                            type: 'Number',
-                            value: '1e-3'
-                        }
-                    },
-                    arg: {
-                        type: 'Number',
-                        value: '5e-4'
-                    }
+      test('chained AT operations', () => {
+        const result = parseCode('PI@(1E-3)@(5E-4);');
+        expect(stripMetadata(result)).toEqual([{
+          type: 'Statement',
+          expression: {
+            type: 'At',
+            target: {
+              type: 'At',
+              target: {
+                type: 'SystemIdentifier',
+                name: 'PI',
+                systemInfo: {
+                  type: 'constant',
+                  value: 3.141592653589793
                 }
-            }]);
-        });
+              },
+              arg: {
+                type: 'Number',
+                value: '1E-3'
+              }
+            },
+            arg: {
+              type: 'Number',
+              value: '5E-4'
+            }
+          }
+        }]);
+      });
     });
 
     describe('ASK operator (?)', () => {
-        test('simple ASK operation', () => {
-            const result = parseCode('PI?(3:4);');
-            expect(stripMetadata(result)).toEqual([{
-                type: 'Statement',
-                expression: {
-                    type: 'Ask',
-                    target: {
-                        type: 'SystemIdentifier',
-                        name: 'PI',
-                        systemInfo: {
-                            type: 'constant',
-                            value: 3.141592653589793
-                        }
-                    },
-                    arg: {
-                        type: 'Number',
-                        value: '3:4'
-                    }
-                }
-            }]);
-        });
+      test('simple ASK operation', () => {
+        const result = parseCode('PI?(3:4);');
+        expect(stripMetadata(result)).toEqual([{
+          type: 'Statement',
+          expression: {
+            type: 'Ask',
+            target: {
+              type: 'SystemIdentifier',
+              name: 'PI',
+              systemInfo: {
+                type: 'constant',
+                value: 3.141592653589793
+              }
+            },
+            arg: {
+              type: 'Number',
+              value: '3:4'
+            }
+          }
+        }]);
+      });
 
-        test('ASK operation with interval', () => {
-            const result = parseCode('interval?(x);');
-            expect(stripMetadata(result)).toEqual([{
-                type: 'Statement',
-                expression: {
-                    type: 'Ask',
-                    target: {
-                        type: 'UserIdentifier',
-                        name: 'interval'
-                    },
-                    arg: {
-                        type: 'UserIdentifier',
-                        name: 'x'
-                    }
-                }
-            }]);
-        });
+      test('ASK operation with interval', () => {
+        const result = parseCode('interval?(x);');
+        expect(stripMetadata(result)).toEqual([{
+          type: 'Statement',
+          expression: {
+            type: 'Ask',
+            target: {
+              type: 'UserIdentifier',
+              name: 'interval'
+            },
+            arg: {
+              type: 'UserIdentifier',
+              name: 'x'
+            }
+          }
+        }]);
+      });
 
-        test('ASK operation on expression', () => {
-            const result = parseCode('(1/3)?(0.333:0.334);');
-            expect(stripMetadata(result)).toEqual([{
-                type: 'Statement',
-                expression: {
-                    type: 'Ask',
-                    target: {
-                        type: 'Grouping',
-                        expression: {
-                            type: 'Number',
-                            value: '1/3'
-                        }
-                    },
-                    arg: {
-                        type: 'Number',
-                        value: '0.333:0.334'
-                    }
-                }
-            }]);
-        });
+      test('ASK operation on expression', () => {
+        const result = parseCode('(1/3)?(0.333:0.334);');
+        expect(stripMetadata(result)).toEqual([{
+          type: 'Statement',
+          expression: {
+            type: 'Ask',
+            target: {
+              type: 'Grouping',
+              expression: {
+                type: 'Number',
+                value: '1/3'
+              }
+            },
+            arg: {
+              type: 'Number',
+              value: '0.333:0.334'
+            }
+          }
+        }]);
+      });
 
-        test('chained ASK operations', () => {
-            const result = parseCode('PI?(3:4)?(true);');
-            expect(stripMetadata(result)).toEqual([{
-                type: 'Statement',
-                expression: {
-                    type: 'Ask',
-                    target: {
-                        type: 'Ask',
-                        target: {
-                            type: 'SystemIdentifier',
-                            name: 'PI',
-                            systemInfo: {
-                                type: 'constant',
-                                value: 3.141592653589793
-                            }
-                        },
-                        arg: {
-                            type: 'Number',
-                            value: '3:4'
-                        }
-                    },
-                    arg: {
-                        type: 'UserIdentifier',
-                        name: 'true'
-                    }
+      test('chained ASK operations', () => {
+        const result = parseCode('PI?(3:4)?(true);');
+        expect(stripMetadata(result)).toEqual([{
+          type: 'Statement',
+          expression: {
+            type: 'Ask',
+            target: {
+              type: 'Ask',
+              target: {
+                type: 'SystemIdentifier',
+                name: 'PI',
+                systemInfo: {
+                  type: 'constant',
+                  value: 3.141592653589793
                 }
-            }]);
-        });
+              },
+              arg: {
+                type: 'Number',
+                value: '3:4'
+              }
+            },
+            arg: {
+              type: 'UserIdentifier',
+              name: 'true'
+            }
+          }
+        }]);
+      });
     });
 
     describe('Enhanced CALL operator (()', () => {
-        test('function call on identifier (backward compatibility)', () => {
-            const result = parseCode('SIN(x);');
-            expect(stripMetadata(result)).toEqual([{
-                type: 'Statement',
-                expression: {
-                    type: 'FunctionCall',
-                    function: {
-                        type: 'SystemIdentifier',
-                        name: 'SIN',
-                        systemInfo: {
-                            type: 'function',
-                            arity: 1
-                        }
-                    },
-                    arguments: {
-                        positional: [{
-                            type: 'UserIdentifier',
-                            name: 'x'
-                        }],
-                        keyword: {}
-                    }
-                }
-            }]);
-        });
+      test('function call on identifier (backward compatibility)', () => {
+        const result = parseCode('SIN(x);');
+        expect(stripMetadata(result)).toEqual([{
+          type: 'Statement',
+          expression: {
+            type: 'FunctionCall',
+            function: {
+              type: 'SystemIdentifier',
+              name: 'SIN',
+              systemInfo: {
+                type: 'function',
+                arity: 1
+              }
+            },
+            arguments: {
+              positional: [{
+                type: 'UserIdentifier',
+                name: 'x'
+              }],
+              keyword: {}
+            }
+          }
+        }]);
+      });
 
-        test('call on number (multiplication semantics)', () => {
-            const result = parseCode('3(4);');
-            expect(stripMetadata(result)).toEqual([{
-                type: 'Statement',
-                expression: {
-                    type: 'Call',
-                    target: {
-                        type: 'Number',
-                        value: '3'
-                    },
-                    arguments: {
-                        positional: [{
-                            type: 'Number',
-                            value: '4'
-                        }],
-                        keyword: {}
-                    }
-                }
-            }]);
-        });
+      test('call on number (multiplication semantics)', () => {
+        const result = parseCode('3(4);');
+        expect(stripMetadata(result)).toEqual([{
+          type: 'Statement',
+          expression: {
+            type: 'Call',
+            target: {
+              type: 'Number',
+              value: '3'
+            },
+            arguments: {
+              positional: [{
+                type: 'Number',
+                value: '4'
+              }],
+              keyword: {}
+            }
+          }
+        }]);
+      });
 
-        test('call on expression', () => {
-            const result = parseCode('(2,3)(4,5);');
-            expect(stripMetadata(result)).toEqual([{
-                type: 'Statement',
-                expression: {
-                    type: 'Call',
-                    target: {
-                        type: 'Tuple',
-                        elements: [{
-                            type: 'Number',
-                            value: '2'
-                        }, {
-                            type: 'Number',
-                            value: '3'
-                        }]
-                    },
-                    arguments: {
-                        positional: [{
-                            type: 'Number',
-                            value: '4'
-                        }, {
-                            type: 'Number',
-                            value: '5'
-                        }],
-                        keyword: {}
-                    }
-                }
-            }]);
-        });
+      test('call on expression', () => {
+        const result = parseCode('(2,3)(4,5);');
+        expect(stripMetadata(result)).toEqual([{
+          type: 'Statement',
+          expression: {
+            type: 'Call',
+            target: {
+              type: 'Tuple',
+              elements: [{
+                type: 'Number',
+                value: '2'
+              }, {
+                type: 'Number',
+                value: '3'
+              }]
+            },
+            arguments: {
+              positional: [{
+                type: 'Number',
+                value: '4'
+              }, {
+                type: 'Number',
+                value: '5'
+              }],
+              keyword: {}
+            }
+          }
+        }]);
+      });
 
-        test('chained calls', () => {
-            const result = parseCode('f(x)(y);');
-            expect(stripMetadata(result)).toEqual([{
-                type: 'Statement',
-                expression: {
-                    type: 'Call',
-                    target: {
-                        type: 'FunctionCall',
-                        function: {
-                            type: 'UserIdentifier',
-                            name: 'f'
-                        },
-                        arguments: {
-                            positional: [{
-                                type: 'UserIdentifier',
-                                name: 'x'
-                            }],
-                            keyword: {}
-                        }
-                    },
-                    arguments: {
-                        positional: [{
-                            type: 'UserIdentifier',
-                            name: 'y'
-                        }],
-                        keyword: {}
-                    }
-                }
-            }]);
-        });
+      test('chained calls', () => {
+        const result = parseCode('f(x)(y);');
+        expect(stripMetadata(result)).toEqual([{
+          type: 'Statement',
+          expression: {
+            type: 'Call',
+            target: {
+              type: 'FunctionCall',
+              function: {
+                type: 'UserIdentifier',
+                name: 'f'
+              },
+              arguments: {
+                positional: [{
+                  type: 'UserIdentifier',
+                  name: 'x'
+                }],
+                keyword: {}
+              }
+            },
+            arguments: {
+              positional: [{
+                type: 'UserIdentifier',
+                name: 'y'
+              }],
+              keyword: {}
+            }
+          }
+        }]);
+      });
 
-        test('operator as function - addition', () => {
-            const result = parseCode('+(3, 4, 7, 9);');
-            expect(stripMetadata(result)).toEqual([{
-                type: 'Statement',
-                expression: {
-                    type: 'FunctionCall',
-                    function: {
-                        type: 'UserIdentifier',
-                        name: '+'
-                    },
-                    arguments: {
-                        positional: [{
-                            type: 'Number',
-                            value: '3'
-                        }, {
-                            type: 'Number',
-                            value: '4'
-                        }, {
-                            type: 'Number',
-                            value: '7'
-                        }, {
-                            type: 'Number',
-                            value: '9'
-                        }],
-                        keyword: {}
-                    }
-                }
-            }]);
-        });
+      test('operator as function - addition', () => {
+        const result = parseCode('+(3, 4, 7, 9);');
+        expect(stripMetadata(result)).toEqual([{
+          type: 'Statement',
+          expression: {
+            type: 'FunctionCall',
+            function: {
+              type: 'UserIdentifier',
+              name: '+'
+            },
+            arguments: {
+              positional: [{
+                type: 'Number',
+                value: '3'
+              }, {
+                type: 'Number',
+                value: '4'
+              }, {
+                type: 'Number',
+                value: '7'
+              }, {
+                type: 'Number',
+                value: '9'
+              }],
+              keyword: {}
+            }
+          }
+        }]);
+      });
 
-        test('operator as function - multiplication', () => {
-            const result = parseCode('*(2, 3, 5);');
-            expect(stripMetadata(result)).toEqual([{
-                type: 'Statement',
-                expression: {
-                    type: 'FunctionCall',
-                    function: {
-                        type: 'UserIdentifier',
-                        name: '*'
-                    },
-                    arguments: {
-                        positional: [{
-                            type: 'Number',
-                            value: '2'
-                        }, {
-                            type: 'Number',
-                            value: '3'
-                        }, {
-                            type: 'Number',
-                            value: '5'
-                        }],
-                        keyword: {}
-                    }
-                }
-            }]);
-        });
+      test('operator as function - multiplication', () => {
+        const result = parseCode('*(2, 3, 5);');
+        expect(stripMetadata(result)).toEqual([{
+          type: 'Statement',
+          expression: {
+            type: 'FunctionCall',
+            function: {
+              type: 'UserIdentifier',
+              name: '*'
+            },
+            arguments: {
+              positional: [{
+                type: 'Number',
+                value: '2'
+              }, {
+                type: 'Number',
+                value: '3'
+              }, {
+                type: 'Number',
+                value: '5'
+              }],
+              keyword: {}
+            }
+          }
+        }]);
+      });
 
-        test('operator as function - comparison', () => {
-            const result = parseCode('<(x, y);');
-            expect(stripMetadata(result)).toEqual([{
-                type: 'Statement',
-                expression: {
-                    type: 'FunctionCall',
-                    function: {
-                        type: 'UserIdentifier',
-                        name: '<'
-                    },
-                    arguments: {
-                        positional: [{
-                            type: 'UserIdentifier',
-                            name: 'x'
-                        }, {
-                            type: 'UserIdentifier',
-                            name: 'y'
-                        }],
-                        keyword: {}
-                    }
-                }
-            }]);
-        });
+      test('operator as function - comparison', () => {
+        const result = parseCode('<(x, y);');
+        expect(stripMetadata(result)).toEqual([{
+          type: 'Statement',
+          expression: {
+            type: 'FunctionCall',
+            function: {
+              type: 'UserIdentifier',
+              name: '<'
+            },
+            arguments: {
+              positional: [{
+                type: 'UserIdentifier',
+                name: 'x'
+              }, {
+                type: 'UserIdentifier',
+                name: 'y'
+              }],
+              keyword: {}
+            }
+          }
+        }]);
+      });
 
-        test('complex operator as function', () => {
-            const result = parseCode('*(+(2, 3), /(6, 2));');
-            expect(stripMetadata(result)).toEqual([{
-                type: 'Statement',
-                expression: {
-                    type: 'FunctionCall',
-                    function: {
-                        type: 'UserIdentifier',
-                        name: '*'
-                    },
-                    arguments: {
-                        positional: [{
-                            type: 'FunctionCall',
-                            function: {
-                                type: 'UserIdentifier',
-                                name: '+'
-                            },
-                            arguments: {
-                                positional: [{
-                                    type: 'Number',
-                                    value: '2'
-                                }, {
-                                    type: 'Number',
-                                    value: '3'
-                                }],
-                                keyword: {}
-                            }
-                        }, {
-                            type: 'FunctionCall',
-                            function: {
-                                type: 'UserIdentifier',
-                                name: '/'
-                            },
-                            arguments: {
-                                positional: [{
-                                    type: 'Number',
-                                    value: '6'
-                                }, {
-                                    type: 'Number',
-                                    value: '2'
-                                }],
-                                keyword: {}
-                            }
-                        }],
-                        keyword: {}
-                    }
+      test('complex operator as function', () => {
+        const result = parseCode('*(+(2, 3), /(6, 2));');
+        expect(stripMetadata(result)).toEqual([{
+          type: 'Statement',
+          expression: {
+            type: 'FunctionCall',
+            function: {
+              type: 'UserIdentifier',
+              name: '*'
+            },
+            arguments: {
+              positional: [{
+                type: 'FunctionCall',
+                function: {
+                  type: 'UserIdentifier',
+                  name: '+'
+                },
+                arguments: {
+                  positional: [{
+                    type: 'Number',
+                    value: '2'
+                  }, {
+                    type: 'Number',
+                    value: '3'
+                  }],
+                  keyword: {}
                 }
-            }]);
-        });
+              }, {
+                type: 'FunctionCall',
+                function: {
+                  type: 'UserIdentifier',
+                  name: '/'
+                },
+                arguments: {
+                  positional: [{
+                    type: 'Number',
+                    value: '6'
+                  }, {
+                    type: 'Number',
+                    value: '2'
+                  }],
+                  keyword: {}
+                }
+              }],
+              keyword: {}
+            }
+          }
+        }]);
+      });
     });
 
     describe('Mixed postfix operations', () => {
-        test('AT followed by ASK', () => {
-            const result = parseCode('PI@(1e-3)?(3.141:3.142);');
-            expect(stripMetadata(result)).toEqual([{
-                type: 'Statement',
-                expression: {
-                    type: 'Ask',
-                    target: {
-                        type: 'At',
-                        target: {
-                            type: 'SystemIdentifier',
-                            name: 'PI',
-                            systemInfo: {
-                                type: 'constant',
-                                value: 3.141592653589793
-                            }
-                        },
-                        arg: {
-                            type: 'Number',
-                            value: '1e-3'
-                        }
-                    },
-                    arg: {
-                        type: 'Number',
-                        value: '3.141:3.142'
-                    }
+      test('AT followed by ASK', () => {
+        const result = parseCode('PI@(1E-3)?(3.141:3.142);');
+        expect(stripMetadata(result)).toEqual([{
+          type: 'Statement',
+          expression: {
+            type: 'Ask',
+            target: {
+              type: 'At',
+              target: {
+                type: 'SystemIdentifier',
+                name: 'PI',
+                systemInfo: {
+                  type: 'constant',
+                  value: 3.141592653589793
                 }
-            }]);
-        });
+              },
+              arg: {
+                type: 'Number',
+                value: '1E-3'
+              }
+            },
+            arg: {
+              type: 'Number',
+              value: '3.141:3.142'
+            }
+          }
+        }]);
+      });
 
-        test('CALL followed by AT', () => {
-            const result = parseCode('f(x)@(epsilon);');
-            expect(stripMetadata(result)).toEqual([{
-                type: 'Statement',
-                expression: {
-                    type: 'At',
-                    target: {
-                        type: 'FunctionCall',
-                        function: {
-                            type: 'UserIdentifier',
-                            name: 'f'
-                        },
-                        arguments: {
-                            positional: [{
-                                type: 'UserIdentifier',
-                                name: 'x'
-                            }],
-                            keyword: {}
-                        }
-                    },
-                    arg: {
-                        type: 'UserIdentifier',
-                        name: 'epsilon'
-                    }
-                }
-            }]);
-        });
+      test('CALL followed by AT', () => {
+        const result = parseCode('f(x)@(epsilon);');
+        expect(stripMetadata(result)).toEqual([{
+          type: 'Statement',
+          expression: {
+            type: 'At',
+            target: {
+              type: 'FunctionCall',
+              function: {
+                type: 'UserIdentifier',
+                name: 'f'
+              },
+              arguments: {
+                positional: [{
+                  type: 'UserIdentifier',
+                  name: 'x'
+                }],
+                keyword: {}
+              }
+            },
+            arg: {
+              type: 'UserIdentifier',
+              name: 'epsilon'
+            }
+          }
+        }]);
+      });
 
-        test('all three postfix operators chained', () => {
-            const result = parseCode('f(x)@(1e-6)?(result);');
-            expect(stripMetadata(result)).toEqual([{
-                type: 'Statement',
-                expression: {
-                    type: 'Ask',
-                    target: {
-                        type: 'At',
-                        target: {
-                            type: 'FunctionCall',
-                            function: {
-                                type: 'UserIdentifier',
-                                name: 'f'
-                            },
-                            arguments: {
-                                positional: [{
-                                    type: 'UserIdentifier',
-                                    name: 'x'
-                                }],
-                                keyword: {}
-                            }
-                        },
-                        arg: {
-                            type: 'Number',
-                            value: '1e-6'
-                        }
-                    },
-                    arg: {
-                        type: 'UserIdentifier',
-                        name: 'result'
-                    }
+      test('all three postfix operators chained', () => {
+        const result = parseCode('f(x)@(1E-6)?(result);');
+        expect(stripMetadata(result)).toEqual([{
+          type: 'Statement',
+          expression: {
+            type: 'Ask',
+            target: {
+              type: 'At',
+              target: {
+                type: 'FunctionCall',
+                function: {
+                  type: 'UserIdentifier',
+                  name: 'f'
+                },
+                arguments: {
+                  positional: [{
+                    type: 'UserIdentifier',
+                    name: 'x'
+                  }],
+                  keyword: {}
                 }
-            }]);
-        });
+              },
+              arg: {
+                type: 'Number',
+                value: '1E-6'
+              }
+            },
+            arg: {
+              type: 'UserIdentifier',
+              name: 'result'
+            }
+          }
+        }]);
+      });
     });
 
     describe('Precedence with other operators', () => {
-        test('postfix has higher precedence than binary operators', () => {
-            const result = parseCode('x@(eps) + y;');
-            expect(stripMetadata(result)).toEqual([{
-                type: 'Statement',
-                expression: {
-                    type: 'BinaryOperation',
-                    operator: '+',
-                    left: {
-                        type: 'At',
-                        target: {
-                            type: 'UserIdentifier',
-                            name: 'x'
-                        },
-                        arg: {
-                            type: 'UserIdentifier',
-                            name: 'eps'
-                        }
-                    },
-                    right: {
-                        type: 'UserIdentifier',
-                        name: 'y'
-                    }
-                }
-            }]);
-        });
+      test('postfix has higher precedence than binary operators', () => {
+        const result = parseCode('x@(eps) + y;');
+        expect(stripMetadata(result)).toEqual([{
+          type: 'Statement',
+          expression: {
+            type: 'BinaryOperation',
+            operator: '+',
+            left: {
+              type: 'At',
+              target: {
+                type: 'UserIdentifier',
+                name: 'x'
+              },
+              arg: {
+                type: 'UserIdentifier',
+                name: 'eps'
+              }
+            },
+            right: {
+              type: 'UserIdentifier',
+              name: 'y'
+            }
+          }
+        }]);
+      });
 
-        test('postfix has higher precedence than infix condition ?', () => {
-            const result = parseCode('x?(test) ? y : z;');
-            expect(stripMetadata(result)).toEqual([{
-                type: 'Statement',
-                expression: {
-                    type: 'BinaryOperation',
-                    operator: '?',
-                    left: {
-                        type: 'Ask',
-                        target: {
-                            type: 'UserIdentifier',
-                            name: 'x'
-                        },
-                        arg: {
-                            type: 'UserIdentifier',
-                            name: 'test'
-                        }
-                    },
-                    right: {
-                        type: 'BinaryOperation',
-                        operator: ':',
-                        left: {
-                            type: 'UserIdentifier',
-                            name: 'y'            
-                        },
-                        right: {
-                            type: 'UserIdentifier',
-                            name: 'z'
-                        }
-                    }
-                }
-            }]);
-        });
+      test('postfix has higher precedence than infix condition ?', () => {
+        const result = parseCode('x?(test) ? y : z;');
+        expect(stripMetadata(result)).toEqual([{
+          type: 'Statement',
+          expression: {
+            type: 'BinaryOperation',
+            operator: '?',
+            left: {
+              type: 'Ask',
+              target: {
+                type: 'UserIdentifier',
+                name: 'x'
+              },
+              arg: {
+                type: 'UserIdentifier',
+                name: 'test'
+              }
+            },
+            right: {
+              type: 'BinaryOperation',
+              operator: ':',
+              left: {
+                type: 'UserIdentifier',
+                name: 'y'
+              },
+              right: {
+                type: 'UserIdentifier',
+                name: 'z'
+              }
+            }
+          }
+        }]);
+      });
 
-        test('postfix with property access', () => {
-            const result = parseCode('obj.prop@(eps);');
-            expect(stripMetadata(result)).toEqual([{
-                type: 'Statement',
-                expression: {
-                    type: 'BinaryOperation',
-                    operator: '.',
-                    left: {
-                        type: 'UserIdentifier',
-                        name: 'obj'
-                    },
-                    right: {
-                        type: 'At',
-                        target: {
-                            type: 'UserIdentifier',
-                            name: 'prop'
-                        },
-                        arg: {
-                            type: 'UserIdentifier',
-                            name: 'eps'
-                        }
-                    }
-                }
-            }]);
-        });
+      test('postfix with property access', () => {
+        const result = parseCode('obj.prop@(eps);');
+        expect(stripMetadata(result)).toEqual([{
+          type: 'Statement',
+          expression: {
+            type: 'BinaryOperation',
+            operator: '.',
+            left: {
+              type: 'UserIdentifier',
+              name: 'obj'
+            },
+            right: {
+              type: 'At',
+              target: {
+                type: 'UserIdentifier',
+                name: 'prop'
+              },
+              arg: {
+                type: 'UserIdentifier',
+                name: 'eps'
+              }
+            }
+          }
+        }]);
+      });
     });
 
     describe('Error cases', () => {
-        test('? without parentheses should be infix condition operator', () => {
-            const result = parseCode('x ? y : z;');
-            expect(stripMetadata(result)).toEqual([{
-                type: 'Statement',
-                expression: {
-                    type: 'BinaryOperation',
-                    operator: '?',
-                    left: {
-                        type: 'UserIdentifier',
-                        name: 'x'
-                    },
-                    right: {
-                        type: 'BinaryOperation',
-                        operator: ':',
-                        left: {
-                            type: 'UserIdentifier',
-                            name: 'y'
-                        },
-                        right: {
-                            type: 'UserIdentifier',
-                            name: 'z'
-                        }
-                    }
-                }
-            }]);
-        });
+      test('? without parentheses should be infix condition operator', () => {
+        const result = parseCode('x ? y : z;');
+        expect(stripMetadata(result)).toEqual([{
+          type: 'Statement',
+          expression: {
+            type: 'BinaryOperation',
+            operator: '?',
+            left: {
+              type: 'UserIdentifier',
+              name: 'x'
+            },
+            right: {
+              type: 'BinaryOperation',
+              operator: ':',
+              left: {
+                type: 'UserIdentifier',
+                name: 'y'
+              },
+              right: {
+                type: 'UserIdentifier',
+                name: 'z'
+              }
+            }
+          }
+        }]);
+      });
 
-        test('unclosed AT parentheses', () => {
-            expect(() => parseCode('x@(y')).toThrow();
-        });
+      test('unclosed AT parentheses', () => {
+        expect(() => parseCode('x@(y')).toThrow();
+      });
 
-        test('unclosed ASK parentheses', () => {
-            expect(() => parseCode('x?(y')).toThrow();
-        });
+      test('unclosed ASK parentheses', () => {
+        expect(() => parseCode('x?(y')).toThrow();
+      });
     });
-});
+  });
 
-// Test pipe operations
-describe('Pipe operations', () => {
+  // Test pipe operations
+  describe('Pipe operations', () => {
     test("simple pipe", () => {
       const ast = parseCode("x |> f;");
       expect(stripMetadata(ast)).toEqual([
@@ -2211,8 +2211,8 @@ describe('Pipe operations', () => {
                 { type: "Number", value: "3" }
               ]
             },
-            right: { 
-              type: "SystemIdentifier", 
+            right: {
+              type: "SystemIdentifier",
               name: "SUM",
               systemInfo: { type: "identifier" }
             },
@@ -3303,12 +3303,12 @@ describe('Pipe operations', () => {
         type: 'Derivative',
         function: {
           type: 'FunctionCall',
-          function: { 
-            type: 'SystemIdentifier', 
+          function: {
+            type: 'SystemIdentifier',
             name: 'SIN',
             systemInfo: { type: 'function', arity: 1 }
           },
-          arguments: { 
+          arguments: {
             positional: [{ type: 'UserIdentifier', name: 'x' }],
             keyword: {}
           }

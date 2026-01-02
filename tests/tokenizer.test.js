@@ -618,14 +618,14 @@ describe("Math Oracle Tokenizer", () => {
 
     describe("scientific notation", () => {
       test("positive scientific notation", () => {
-        const tokens = tokenize("1e5 3.14e-2 2E+10");
+        const tokens = tokenize("1E5 3.14E-2 2E+10");
         expect(tokens).toEqual(
           withEnd([
-            { type: "Number", original: "1e5", value: "1e5", pos: [0, 0, 3] },
+            { type: "Number", original: "1E5", value: "1E5", pos: [0, 0, 3] },
             {
               type: "Number",
-              original: " 3.14e-2",
-              value: "3.14e-2",
+              original: " 3.14E-2",
+              value: "3.14E-2",
               pos: [3, 4, 11],
             },
             {
@@ -639,14 +639,14 @@ describe("Math Oracle Tokenizer", () => {
       });
 
       test("negative scientific notation", () => {
-        const tokens = tokenize("-1e5 -3.14e-2");
+        const tokens = tokenize("-1E5 -3.14E-2");
         expect(tokens).toEqual(
           withEnd([
-            { type: "Number", original: "-1e5", value: "-1e5", pos: [0, 0, 4] },
+            { type: "Number", original: "-1E5", value: "-1E5", pos: [0, 0, 4] },
             {
               type: "Number",
-              original: " -3.14e-2",
-              value: "-3.14e-2",
+              original: " -3.14E-2",
+              value: "-3.14E-2",
               pos: [4, 5, 13],
             },
           ]),

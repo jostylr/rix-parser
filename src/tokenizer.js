@@ -347,8 +347,9 @@ function tryMatchNumber(input, position) {
   }
 
   // Scientific notation with various bases (including leading decimal)
+  // Strict mode: Only allow 'E', not 'e'
   match = remaining.match(
-    /^-?(?:\d+(?:\.\d+)?(?:#\d+)?|\.\d+(?:#\d+)?|\d+\.\.\d+\/\d+|\d+\/\d+|\d+\.\d+|\.\d+|\d+)[Ee][+-]?\d+/,
+    /^-?(?:\d+(?:\.\d+)?(?:#\d+)?|\.\d+(?:#\d+)?|\d+\.\.\d+\/\d+|\d+\/\d+|\d+\.\d+|\.\d+|\d+)(?:E|_\^)[+-]?\d+/,
   );
   if (match) {
     return {
