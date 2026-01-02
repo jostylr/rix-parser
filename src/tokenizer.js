@@ -262,16 +262,79 @@ function tryMatchString(input, position) {
 
 function tryMatchNumber(input, position) {
   const remaining = input.slice(position);
+  let match;
+  // console.log("tryMatchNumber", remaining);
 
   // Check if it starts with a digit, minus followed by digit, or decimal point followed by digit
+  // OR if it starts with a prefix pattern (0 followed by letter)
   if (!/^(-?\d|-?\.\d)/.test(remaining)) {
     return null;
   }
 
   // Try all number patterns (longest first for maximal munch)
 
+  // Prefix Patterns (0x..., 0b..., 0k..., etc.)
+  // Must check these before standard decimal patterns to avoid catching '0' as Integer(0) and 'x' as Identifier
+
+  // Prefix Interval: 0x1:0xA or 0x1:10
+  match = remaining.match(
+    /^-?(?:0[a-zA-Z][0-9a-zA-Z]*(?:\.[0-9a-zA-Z]*)?|(?:\d+\.\.\d+\/\d+|\d+\.\d+#\d+|\.\d+#\d+|\d+#\d+|\d+\/\d+|\d+\.\d+|\.\d+|\d+)):-?(?:0[a-zA-Z][0-9a-zA-Z]*(?:\.[0-9a-zA-Z]*)?|(?:\d+\.\.\d+\/\d+|\d+\.\d+#\d+|\.\d+#\d+|\d+#\d+|\d+\/\d+|\d+\.\d+|\.\d+|\d+))/,
+  );
+  if (match) {
+    return {
+      type: "Number",
+      original: match[0],
+      value: match[0],
+      pos: [position, position, position + match[0].length],
+    };
+  }
+
+  // Prefix Mixed Number: 0xA..B/C or 0xA..0xB/0xC
+  match = remaining.match(/^-?0[a-zA-Z][0-9a-zA-Z]*\.\.0?[a-zA-Z]?[0-9a-zA-Z]*\/0?[a-zA-Z]?[0-9a-zA-Z]*/);
+  if (match) {
+    return {
+      type: "Number",
+      original: match[0],
+      value: match[0],
+      pos: [position, position, position + match[0].length],
+    };
+  }
+
+  // Prefix Rational: 0xA/0xB or 0xA/B or A/0xB
+  match = remaining.match(/^-?0[a-zA-Z][0-9a-zA-Z]*\/0?[a-zA-Z]?[0-9a-zA-Z]*/);
+  if (match) {
+    return {
+      type: "Number",
+      original: match[0],
+      value: match[0],
+      pos: [position, position, position + match[0].length],
+    };
+  }
+
+  // Prefix Decimal: 0xA.B
+  match = remaining.match(/^-?0[a-zA-Z][0-9a-zA-Z]*\.[0-9a-zA-Z]*/);
+  if (match) {
+    return {
+      type: "Number",
+      original: match[0],
+      value: match[0],
+      pos: [position, position, position + match[0].length],
+    };
+  }
+
+  // Prefix Integer: 0xA, 0b101
+  match = remaining.match(/^-?0[a-zA-Z][0-9a-zA-Z]*/);
+  if (match) {
+    return {
+      type: "Number",
+      original: match[0],
+      value: match[0],
+      pos: [position, position, position + match[0].length],
+    };
+  }
+
   // Complex intervals with all number types (including leading decimal)
-  let match = remaining.match(
+  match = remaining.match(
     /^-?(?:\d+\.\.\d+\/\d+|\d+\.\d+#\d+|\.\d+#\d+|\d+#\d+|\d+\/\d+|\d+\.\d+|\.\d+|\d+):-?(?:\d+\.\.\d+\/\d+|\d+\.\d+#\d+|\.\d+#\d+|\d+#\d+|\d+\/\d+|\d+\.\d+|\.\d+|\d+)/,
   );
   if (match) {
