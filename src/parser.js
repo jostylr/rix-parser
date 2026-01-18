@@ -904,6 +904,22 @@ class Parser {
         pos: left.pos,
         original: left.original + operator.original,
       });
+    } else if (operator.value === ".") {
+      // Dot property access: P.type, P.Derivative, etc.
+      // Right side must be an identifier (property name)
+      if (this.current.type !== "Identifier") {
+        this.error("Expected property name after '.'");
+      }
+      const propertyName = this.current.value;
+      const propertyOriginal = this.current.original;
+      this.advance();
+
+      return this.createNode("DotAccess", {
+        object: left,
+        property: propertyName,
+        pos: left.pos,
+        original: left.original + operator.original + propertyOriginal,
+      });
     } else {
       // Binary operator
       right = this.parseExpression(rightPrec);

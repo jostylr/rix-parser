@@ -1836,22 +1836,18 @@ describe("RiX Parser", () => {
         expect(stripMetadata(result)).toEqual([{
           type: 'Statement',
           expression: {
-            type: 'BinaryOperation',
-            operator: '.',
-            left: {
-              type: 'UserIdentifier',
-              name: 'obj'
-            },
-            right: {
-              type: 'At',
-              target: {
+            type: 'At',
+            target: {
+              type: 'DotAccess',
+              object: {
                 type: 'UserIdentifier',
-                name: 'prop'
+                name: 'obj'
               },
-              arg: {
-                type: 'UserIdentifier',
-                name: 'eps'
-              }
+              property: 'prop'
+            },
+            arg: {
+              type: 'UserIdentifier',
+              name: 'eps'
             }
           }
         }]);
