@@ -35,6 +35,13 @@ const symbols = [
   ":%",
   "{{",
   "}}",
+  // Brace sigil containers (must come before single {)
+  "{=",
+  "{?",
+  "{;",
+  "{|",
+  "{:",
+  "{@",
   "<=",
   ">=",
   "==",
@@ -49,6 +56,8 @@ const symbols = [
   "?=",
   "??",
   "?:",
+  // System function prefix (must come before single @)
+  "@_",
   "|^:",
   "|+",
   "|*",
@@ -59,6 +68,12 @@ const symbols = [
   "~{",
   "~[",
   ":=",
+  // Double-dot and dot-pipe operators (before single .)
+  "..",
+  "|.",
+  ".|",
+  // Mutation prefix
+  "{!",
   "%",
   ",",
   ";",
@@ -77,6 +92,7 @@ const symbols = [
   ".",
   "~",
   "@",
+  "=",
   "'",
   ":",
   "?",
@@ -112,6 +128,10 @@ function tokenize(input) {
     if (!token) {
       // Try to match strings (quotes, backticks, comments)
       token = tryMatchString(input, position);
+    }
+    if (!token) {
+      // Try to match @_ system function refs (before identifiers and symbols)
+      token = tryMatchSystemFunctionRef(input, position);
     }
     if (!token) {
       // Try to match identifiers
@@ -322,6 +342,17 @@ function tryMatchNumber(input, position) {
     };
   }
 
+  // Custom base: 0z[N]digits where N is the base number
+  match = remaining.match(/^-?0z\[\d+\][0-9a-zA-Z]*/);
+  if (match) {
+    return {
+      type: "Number",
+      original: match[0],
+      value: match[0],
+      pos: [position, position, position + match[0].length],
+    };
+  }
+
   // Prefix Integer: 0xA, 0b101
   match = remaining.match(/^-?0[a-zA-Z][0-9a-zA-Z]*/);
   if (match) {
@@ -447,6 +478,31 @@ function tryMatchNumber(input, position) {
       original: match[0],
       value: match[0],
       pos: [position, position, position + match[0].length],
+    };
+  }
+
+  return null;
+}
+
+function tryMatchSystemFunctionRef(input, position) {
+  const remaining = input.slice(position);
+
+  // Match @_ followed by an identifier: @_ASSIGN, @_ADD, etc.
+  if (remaining.startsWith("@_") && remaining.length > 2 && identifierStart.test(remaining[2])) {
+    let length = 3; // @_ + first char
+    while (length < remaining.length && identifierPart.test(remaining[length])) {
+      length++;
+    }
+    const original = remaining.slice(0, length);
+    const name = remaining.slice(2, length); // Strip @_ prefix for value
+    // System function refs are always uppercase-normalized
+    const value = name[0].toUpperCase() + name.slice(1).toUpperCase();
+    return {
+      type: "Identifier",
+      original: original,
+      value: value,
+      kind: "SystemFunction",
+      pos: [position, position, position + length],
     };
   }
 

@@ -1699,12 +1699,12 @@ describe("Math Oracle Tokenizer", () => {
     });
 
     test("number patterns with spaces break into separate tokens", () => {
+      // .. is now the double-dot operator, so "1 .. 3 / 4" tokenizes as: 1 .. 3 / 4
       const tokens = tokenize("1 .. 3 / 4");
       expect(tokens).toEqual(
         withEnd([
           { type: "Number", original: "1", value: "1", pos: [0, 0, 1] },
-          { type: "Symbol", original: " .", value: ".", pos: [1, 2, 3] },
-          { type: "Symbol", original: ".", value: ".", pos: [3, 3, 4] },
+          { type: "Symbol", original: " ..", value: "..", pos: [1, 2, 4] },
           { type: "Number", original: " 3", value: "3", pos: [4, 5, 6] },
           { type: "Symbol", original: " /", value: "/", pos: [6, 7, 8] },
           { type: "Number", original: " 4", value: "4", pos: [8, 9, 10] },

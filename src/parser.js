@@ -79,10 +79,10 @@ const SYMBOL_TABLE = {
   "|^:": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
   "|?": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
 
-  // Equality operators
+  // Assignment with = (same as :=)
   "=": {
-    precedence: PRECEDENCE.EQUALITY,
-    associativity: "left",
+    precedence: PRECEDENCE.ASSIGNMENT,
+    associativity: "right",
     type: "infix",
   },
   "?=": {
@@ -338,6 +338,23 @@ const SYMBOL_TABLE = {
   "{{": { precedence: 0, type: "codeblock" },
   "}}": { precedence: 0, type: "codeblock" },
 
+  // Brace sigil containers
+  "{=": { precedence: 0, type: "brace_sigil" },
+  "{?": { precedence: 0, type: "brace_sigil" },
+  "{;": { precedence: 0, type: "brace_sigil" },
+  "{|": { precedence: 0, type: "brace_sigil" },
+  "{:": { precedence: 0, type: "brace_sigil" },
+  "{@": { precedence: 0, type: "brace_sigil" },
+
+  // Mutation brace
+  "{!": { precedence: 0, type: "brace_sigil" },
+
+  // Double-dot (external property access)
+  "..": { precedence: PRECEDENCE.PROPERTY, associativity: "left", type: "infix" },
+  // Dot-pipe operators
+  ".|":  { precedence: PRECEDENCE.PROPERTY, associativity: "left", type: "postfix" },
+  "|.": { precedence: PRECEDENCE.PROPERTY, associativity: "left", type: "postfix" },
+
   // Separators
   ",": { precedence: 5, associativity: "left", type: "infix" },
   ";": {
@@ -410,7 +427,7 @@ class Parser {
         };
       }
     }
-    return { precedence: 0, type: "operand" };
+    return null;
   }
 
   // Parse expression with given minimum precedence
@@ -445,7 +462,12 @@ class Parser {
 
       case "Identifier":
         this.advance();
-        if (token.kind === "System") {
+        if (token.kind === "SystemFunction") {
+          return this.createNode("SystemFunctionRef", {
+            name: token.value,
+            original: token.original,
+          });
+        } else if (token.kind === "System") {
           const systemInfo = this.systemLookup(token.value);
           return this.createNode("SystemIdentifier", {
             name: token.value,
@@ -473,8 +495,36 @@ class Parser {
           return this.parseArray();
         } else if (token.value === "{") {
           return this.parseBraceContainer();
-        } else if (token.value === "{{") {
+        } else if (token.value === "{{" ) {
           return this.parseCodeBlock();
+        } else if (token.value === "{=" || token.value === "{?" || token.value === "{;" || token.value === "{|" || token.value === "{:" || token.value === "{@") {
+          return this.parseBraceSigil(token.value);
+        } else if (token.value === "{!") {
+          return this.parseBraceSigil(token.value);
+        } else if (token.value === "@") {
+          // @ followed by { or brace sigil = deferred block: @{; ...}, @{? ...}, @{...}
+          this.advance(); // consume '@'
+          const nextVal = this.current.value;
+          if (nextVal === "{" || nextVal === "{;" || nextVal === "{?" || nextVal === "{=" || nextVal === "{|" || nextVal === "{:" || nextVal === "{@" || nextVal === "{{") {
+            let inner;
+            if (nextVal === "{") {
+              inner = this.parseBraceContainer();
+            } else if (nextVal === "{{") {
+              inner = this.parseCodeBlock();
+            } else {
+              inner = this.parseBraceSigil(nextVal);
+            }
+            return this.createNode("DeferredBlock", {
+              body: inner,
+              pos: token.pos,
+              original: token.original,
+            });
+          }
+          // Bare @ — treat as user identifier for postfix @(...) syntax
+          return this.createNode("UserIdentifier", {
+            name: "@",
+            original: token.original,
+          });
         } else if (token.value === "+" || token.value === "-") {
           // Check if this is a function call (operator followed by parentheses)
           if (this.peek().value === "(") {
@@ -518,14 +568,39 @@ class Parser {
     // Special case for function calls - check if we have an identifier followed by '('
     if (
       operator.value === "(" &&
-      (left.type === "UserIdentifier" || left.type === "SystemIdentifier")
+      (left.type === "UserIdentifier" || left.type === "SystemIdentifier" || left.type === "SystemFunctionRef")
     ) {
+      // Lowercase letter-based user identifiers followed by ( are implicit multiplication: f(x) = f * (x)
+      // Uppercase (System/SystemFunctionRef) are function calls: F(x), @_ASSIGN(x)
+      // Operator-symbol identifiers (+, *, <, etc.) remain function calls
+      if (left.type === "UserIdentifier" && /^[\p{L}]/u.test(left.name)) {
+        // Implicit multiplication: parse the grouped expression and create MUL
+        const grouping = this.parseGrouping();
+        return this.createNode("ImplicitMultiplication", {
+          left: left,
+          right: grouping,
+          pos: left.pos,
+          original: left.original + operator.original,
+        });
+      }
+
       this.advance(); // consume '('
       const args = this.parseFunctionCallArgs();
       if (this.current.value !== ")") {
         this.error("Expected closing parenthesis in function call");
       }
       this.advance(); // consume ')'
+
+      // SystemFunctionRef calls produce SystemCall nodes
+      if (left.type === "SystemFunctionRef") {
+        return this.createNode("SystemCall", {
+          name: left.name,
+          arguments: args,
+          pos: left.pos,
+          original: left.original + operator.original,
+        });
+      }
+
       return this.createNode("FunctionCall", {
         function: left,
         arguments: args,
@@ -567,6 +642,33 @@ class Parser {
         funcName = left.function;
         // Convert function call arguments to parameter definitions
         parameters = this.convertArgsToParams(left.arguments);
+      } else if (left.type === "ImplicitMultiplication") {
+        // lowercase f(x) :-> expr — treat as function definition
+        // left.left is the function name identifier, left.right is the Grouping/Tuple with params
+        funcName = left.left;
+        parameters = { positional: [], keyword: [], conditionals: [], metadata: {} };
+        const paramExpr = left.right;
+        if (paramExpr.type === "Grouping" && paramExpr.expression) {
+          if (paramExpr.expression.type === "ParameterList") {
+            parameters = paramExpr.expression.parameters;
+          } else if (paramExpr.expression.type === "UserIdentifier") {
+            parameters.positional.push({ name: paramExpr.expression.name, defaultValue: null });
+          } else if (paramExpr.expression.type === "BinaryOperation" && paramExpr.expression.operator === "?") {
+            const paramName = paramExpr.expression.left.name || paramExpr.expression.left.value;
+            parameters.positional.push({ name: paramName, defaultValue: null });
+            parameters.conditionals = parameters.conditionals || [];
+            parameters.conditionals.push(paramExpr.expression.right);
+          }
+        } else if (paramExpr.type === "Tuple") {
+          for (const el of paramExpr.elements) {
+            const result = this.parseParameterFromArg(el, false);
+            parameters.positional.push(result.param);
+            if (result.condition) {
+              parameters.conditionals = parameters.conditionals || [];
+              parameters.conditionals.push(result.condition);
+            }
+          }
+        }
       }
 
       return this.createNode("FunctionDefinition", {
@@ -920,6 +1022,43 @@ class Parser {
         pos: left.pos,
         original: left.original + operator.original + propertyOriginal,
       });
+    } else if (operator.value === "..") {
+      // Double-dot external property access: obj..b
+      // If followed by identifier, access that external property
+      // If followed by nothing (or non-identifier), return all external properties
+      if (this.current.type === "Identifier") {
+        const propertyName = this.current.value;
+        const propertyOriginal = this.current.original;
+        this.advance();
+        return this.createNode("ExternalAccess", {
+          object: left,
+          property: propertyName,
+          pos: left.pos,
+          original: left.original + operator.original + propertyOriginal,
+        });
+      } else {
+        // obj.. returns map of all external properties
+        return this.createNode("ExternalAccess", {
+          object: left,
+          property: null,
+          pos: left.pos,
+          original: left.original + operator.original,
+        });
+      }
+    } else if (operator.value === ".|") {
+      // obj.| returns set of keys
+      return this.createNode("KeySet", {
+        object: left,
+        pos: left.pos,
+        original: left.original + operator.original,
+      });
+    } else if (operator.value === "|.") {
+      // obj|. returns set of values
+      return this.createNode("ValueSet", {
+        object: left,
+        pos: left.pos,
+        original: left.original + operator.original,
+      });
     } else {
       // Binary operator
       right = this.parseExpression(rightPrec);
@@ -1154,6 +1293,7 @@ class Parser {
         this.current.value === "'" &&
         (left.type === "UserIdentifier" ||
           left.type === "SystemIdentifier" ||
+          left.type === "SystemFunctionRef" ||
           left.type === "FunctionCall" ||
           left.type === "PropertyAccess" ||
           left.type === "Derivative" ||
@@ -1170,6 +1310,41 @@ class Parser {
       }
       if (this.current.value === "~{") {
         left = this.parseMathematicalUnit(left);
+        continue;
+      }
+
+      // Special case for mutation syntax: obj{= ...} or obj{! ...}
+      if (this.current.value === "{=" || this.current.value === "{!") {
+        left = this.parseMutation(left);
+        continue;
+      }
+
+      // Command-style call: HELP topic, LOAD pkg, UNLOAD pkg
+      // SystemIdentifier followed by Identifier/String/Number (no parens) → implicit call
+      if (
+        left.type === "SystemIdentifier" &&
+        (this.current.type === "Identifier" || this.current.type === "String" || this.current.type === "Number")
+      ) {
+        const args = [];
+        // Consume all following arguments until statement terminator or End
+        while (
+          this.current.type !== "End" &&
+          this.current.value !== ";" &&
+          this.current.value !== "," &&
+          this.current.value !== ")" &&
+          this.current.value !== "]" &&
+          this.current.value !== "}" &&
+          this.current.value !== "}}"
+        ) {
+          const arg = this.parsePrefix();
+          args.push(arg);
+        }
+        left = this.createNode("CommandCall", {
+          command: left,
+          arguments: args,
+          pos: left.pos,
+          original: left.original,
+        });
         continue;
       }
 
@@ -1554,6 +1729,147 @@ class Parser {
     });
   }
 
+  // Parse brace sigil containers: {= map, {? case, {; block, {| set, {: tuple, {@ loop
+  parseBraceSigil(sigil) {
+    const startToken = this.current;
+    this.advance(); // consume the sigil token (e.g., '{=')
+
+    const sigilTypeMap = {
+      "{=": "MapContainer",
+      "{?": "CaseContainer",
+      "{;": "BlockContainer",
+      "{|": "SetContainer",
+      "{:": "TupleContainer",
+      "{@": "LoopContainer",
+    };
+
+    const nodeType = sigilTypeMap[sigil];
+
+    // Determine separator: temporal (;) vs spatial (,)
+    const temporalSigils = new Set(["{?", "{;", "{@"]);
+    const isTemporal = temporalSigils.has(sigil);
+    const separator = isTemporal ? ";" : ",";
+
+    const elements = [];
+
+    if (this.current.value !== "}") {
+      do {
+        // Handle leading separators (empty slots)
+        if (this.current.value === separator) {
+          this.advance();
+          continue;
+        }
+
+        const element = this.parseExpression(0);
+        elements.push(element);
+
+        // Check for separator
+        if (this.current.value === separator) {
+          this.advance();
+          // Allow trailing separator before }
+          if (this.current.value === "}") {
+            break;
+          }
+        } else if (this.current.value === "}") {
+          break;
+        } else if (this.current.type === "End") {
+          this.error(`Expected closing } for ${nodeType}`);
+        } else {
+          // Also accept the other separator type for flexibility
+          const altSep = isTemporal ? "," : ";";
+          if (this.current.value === altSep) {
+            this.advance();
+            if (this.current.value === "}") break;
+          } else {
+            break;
+          }
+        }
+      } while (this.current.value !== "}" && this.current.type !== "End");
+    }
+
+    if (this.current.value !== "}") {
+      this.error(`Expected closing } for ${nodeType}`);
+    }
+    this.advance(); // consume '}'
+
+    return this.createNode(nodeType, {
+      sigil: sigil,
+      elements: elements,
+      pos: startToken.pos,
+      original: startToken.original,
+    });
+  }
+
+  // Parse mutation syntax: obj{= +a=3, -.b, +c} or obj{! +a=3, -.b}
+  parseMutation(target) {
+    const sigil = this.current.value; // "{=" or "{!"
+    const mutate = sigil === "{!"; // true = in-place, false = new copy
+    const startToken = this.current;
+    this.advance(); // consume '{=' or '{!'
+
+    const operations = [];
+
+    if (this.current.value !== "}") {
+      do {
+        // Each operation starts with + (add/merge) or - (remove)
+        const op = { action: null, key: null, value: null };
+
+        if (this.current.value === "+") {
+          op.action = "add";
+          this.advance(); // consume '+'
+        } else if (this.current.value === "-") {
+          op.action = "remove";
+          this.advance(); // consume '-'
+          // Remove expects .key syntax: -.b
+          if (this.current.value === ".") {
+            this.advance(); // consume '.'
+          }
+        } else {
+          // Default to add
+          op.action = "add";
+        }
+
+        // Parse key (identifier)
+        if (this.current.type === "Identifier") {
+          op.key = this.current.value;
+          this.advance();
+        } else {
+          this.error("Expected property name in mutation");
+        }
+
+        // Check for = value
+        if (op.action === "add" && (this.current.value === "=" || this.current.value === ":=")) {
+          this.advance(); // consume '=' or ':='
+          op.value = this.parseExpression(PRECEDENCE.CONDITION + 1);
+        }
+
+        operations.push(op);
+
+        if (this.current.value === ",") {
+          this.advance();
+          if (this.current.value === "}") break;
+        } else if (this.current.value === "}") {
+          break;
+        } else {
+          break;
+        }
+      } while (this.current.value !== "}" && this.current.type !== "End");
+    }
+
+    if (this.current.value !== "}") {
+      this.error("Expected closing } for mutation");
+    }
+    this.advance(); // consume '}'
+
+    return this.createNode("Mutation", {
+      target: target,
+      mutate: mutate,
+      operations: operations,
+      pos: startToken.pos,
+      original: startToken.original,
+    });
+  }
+
   parseCodeBlock() {
     const startToken = this.current;
     this.advance(); // consume '{{'
@@ -1911,7 +2227,7 @@ class Parser {
     // Check for default value
     if (this.current.value === ":=") {
       this.advance();
-      param.defaultValue = this.parseExpression(PRECEDENCE.ASSIGNMENT + 1);
+      param.defaultValue = this.parseExpression(PRECEDENCE.CONDITION + 1);
     }
 
     // Keyword-only parameters must have default values
@@ -2248,6 +2564,18 @@ class Parser {
 
   // Parse function calls - now works on any expression, not just identifiers
   parseCall(target) {
+    // Lowercase letter-based user identifiers followed by ( are implicit multiplication: f(x) = f * (x)
+    // Operator-symbol identifiers (+, *, <, etc.) remain function calls
+    if (target.type === "UserIdentifier" && /^[\p{L}]/u.test(target.name)) {
+      const grouping = this.parseGrouping();
+      return this.createNode("ImplicitMultiplication", {
+        left: target,
+        right: grouping,
+        pos: target.pos,
+        original: target.original + "(...)",
+      });
+    }
+
     this.advance(); // consume '('
     const args = this.parseFunctionCallArgs();
     if (this.current.value !== ")") {
@@ -2255,25 +2583,33 @@ class Parser {
     }
     this.advance(); // consume ')'
 
-    // Maintain backward compatibility: use FunctionCall for identifiers, Call for others
-    if (
-      target.type === "UserIdentifier" ||
-      target.type === "SystemIdentifier"
-    ) {
+    // SystemFunctionRef calls produce SystemCall nodes
+    if (target.type === "SystemFunctionRef") {
+      return this.createNode("SystemCall", {
+        name: target.name,
+        arguments: args,
+        pos: target.pos,
+        original: target.original + "(...)",
+      });
+    }
+
+    // SystemIdentifier and UserIdentifier (operator symbols) produce FunctionCall
+    if (target.type === "SystemIdentifier" || target.type === "UserIdentifier") {
       return this.createNode("FunctionCall", {
         function: target,
         arguments: args,
         pos: target.pos,
         original: target.original + "(...)",
       });
-    } else {
-      return this.createNode("Call", {
-        target: target,
-        arguments: args,
-        pos: target.pos,
-        original: target.original + "(...)",
-      });
     }
+
+    // Everything else (expressions, etc.)
+    return this.createNode("Call", {
+      target: target,
+      arguments: args,
+      pos: target.pos,
+      original: target.original + "(...)",
+    });
   }
 
   // Parse @ postfix operator (AT metadata access)

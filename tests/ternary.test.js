@@ -181,13 +181,13 @@ describe('Ternary Operator (??:)', () => {
     });
 
     it('should handle precedence correctly with comparison', () => {
-        const result = parse('a < b ?? c > d ?: e = f');
+        const result = parse('a < b ?? c > d ?: e == f');
         const ast = result[0];
         
         expect(ast.type).toBe('TernaryOperation');
         expect(ast.condition.operator).toBe('<');
         expect(ast.trueExpression.operator).toBe('>');
-        expect(ast.falseExpression.operator).toBe('=');
+        expect(ast.falseExpression.operator).toBe('==');
     });
 
     it('should parse ternary with code block in true branch', () => {

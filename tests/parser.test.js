@@ -161,7 +161,7 @@ describe("RiX Parser", () => {
 
     test("function definition with condition", () => {
       const ast = parseCode(
-        "h(x, y; n := 2 ? x^2 + y^2 = 1) :-> COS(x; n) * SIN(y; n);",
+        "h(x, y; n := 2 ? x^2 + y^2 == 1) :-> COS(x; n) * SIN(y; n);",
       );
       expect(stripMetadata(ast)).toEqual([
         {
@@ -183,7 +183,7 @@ describe("RiX Parser", () => {
               conditionals: [
                 {
                   type: "BinaryOperation",
-                  operator: "=",
+                  operator: "==",
                   left: {
                     type: "BinaryOperation",
                     operator: "+",
@@ -355,13 +355,13 @@ describe("RiX Parser", () => {
     });
 
     test("function call with semicolon separator", () => {
-      const ast = parseCode("f(2, 3; a := 4);");
+      const ast = parseCode("F(2, 3; a := 4);");
       expect(stripMetadata(ast)).toEqual([
         {
           type: "Statement",
           expression: {
             type: "FunctionCall",
-            function: { type: "UserIdentifier", name: "f" },
+            function: { type: "SystemIdentifier", name: "F", systemInfo: { type: "identifier" } },
             arguments: {
               positional: [
                 { type: "Number", value: "2" },
@@ -377,13 +377,13 @@ describe("RiX Parser", () => {
     });
 
     test("function call with shorthand keyword argument", () => {
-      const ast = parseCode("f(2; n);");
+      const ast = parseCode("F(2; n);");
       expect(stripMetadata(ast)).toEqual([
         {
           type: "Statement",
           expression: {
             type: "FunctionCall",
-            function: { type: "UserIdentifier", name: "f" },
+            function: { type: "SystemIdentifier", name: "F", systemInfo: { type: "identifier" } },
             arguments: {
               positional: [{ type: "Number", value: "2" }],
               keyword: {
@@ -533,17 +533,34 @@ describe("RiX Parser", () => {
   });
 
   describe("Function calls", () => {
-    test("simple function call", () => {
-      const ast = parseCode("f(x);");
+    test("simple function call (uppercase)", () => {
+      const ast = parseCode("F(x);");
       expect(stripMetadata(ast)).toEqual([
         {
           type: "Statement",
           expression: {
             type: "FunctionCall",
-            function: { type: "UserIdentifier", name: "f" },
+            function: { type: "SystemIdentifier", name: "F", systemInfo: { type: "identifier" } },
             arguments: {
               positional: [{ type: "UserIdentifier", name: "x" }],
               keyword: {},
+            },
+          },
+        },
+      ]);
+    });
+
+    test("lowercase f(x) is implicit multiplication", () => {
+      const ast = parseCode("f(x);");
+      expect(stripMetadata(ast)).toEqual([
+        {
+          type: "Statement",
+          expression: {
+            type: "ImplicitMultiplication",
+            left: { type: "UserIdentifier", name: "f" },
+            right: {
+              type: "Grouping",
+              expression: { type: "UserIdentifier", name: "x" },
             },
           },
         },
@@ -1520,17 +1537,17 @@ describe("RiX Parser", () => {
           expression: {
             type: 'Call',
             target: {
-              type: 'FunctionCall',
-              function: {
+              type: 'ImplicitMultiplication',
+              left: {
                 type: 'UserIdentifier',
                 name: 'f'
               },
-              arguments: {
-                positional: [{
+              right: {
+                type: 'Grouping',
+                expression: {
                   type: 'UserIdentifier',
                   name: 'x'
-                }],
-                keyword: {}
+                }
               }
             },
             arguments: {
@@ -1713,17 +1730,17 @@ describe("RiX Parser", () => {
           expression: {
             type: 'At',
             target: {
-              type: 'FunctionCall',
-              function: {
+              type: 'ImplicitMultiplication',
+              left: {
                 type: 'UserIdentifier',
                 name: 'f'
               },
-              arguments: {
-                positional: [{
+              right: {
+                type: 'Grouping',
+                expression: {
                   type: 'UserIdentifier',
                   name: 'x'
-                }],
-                keyword: {}
+                }
               }
             },
             arg: {
@@ -1743,17 +1760,17 @@ describe("RiX Parser", () => {
             target: {
               type: 'At',
               target: {
-                type: 'FunctionCall',
-                function: {
+                type: 'ImplicitMultiplication',
+                left: {
                   type: 'UserIdentifier',
                   name: 'f'
                 },
-                arguments: {
-                  positional: [{
+                right: {
+                  type: 'Grouping',
+                  expression: {
                     type: 'UserIdentifier',
                     name: 'x'
-                  }],
-                  keyword: {}
+                  }
                 }
               },
               arg: {
@@ -1961,14 +1978,14 @@ describe("RiX Parser", () => {
               ]
             },
             right: {
-              type: "FunctionCall",
-              function: { type: "UserIdentifier", name: "f" },
-              arguments: {
-                positional: [
+              type: "ImplicitMultiplication",
+              left: { type: "UserIdentifier", name: "f" },
+              right: {
+                type: "Tuple",
+                elements: [
                   { type: "PlaceHolder", place: 2 },
                   { type: "PlaceHolder", place: 1 }
-                ],
-                keyword: {}
+                ]
               }
             }
           },
@@ -2123,15 +2140,15 @@ describe("RiX Parser", () => {
               ]
             },
             right: {
-              type: "FunctionCall",
-              function: { type: "UserIdentifier", name: "g" },
-              arguments: {
-                positional: [
+              type: "ImplicitMultiplication",
+              left: { type: "UserIdentifier", name: "g" },
+              right: {
+                type: "Tuple",
+                elements: [
                   { type: "PlaceHolder", place: 3 },
                   { type: "PlaceHolder", place: 2 },
                   { type: "PlaceHolder", place: 1 }
-                ],
-                keyword: {}
+                ]
               }
             }
           },
