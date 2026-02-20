@@ -1,13 +1,16 @@
 Use =, := (redundant), :<, :> for assignments, assertions. Use ==, <, > for boolean checks. Use :=:, :<:, ... for returning a set. 
 
 
-map:  {= a=3, b=6}  // = here is same as := and both should be allowed
+map:  {= a=3, b=6}  ## = here is same as := and both should be allowed
 case: {? x<y ? 3*x; x>5 ? x*4; x+2} 
 piecewise function: (x,y) -> {? x<y ? 3*x; x>5 ? x*4; x+2}  
 set {|  3, 6, "cool"} 
 array/tuple {: 5, 6, 7, 8 } equivalent to [5, 6, 7, 8] which should also be allowed
 multiline {; x = x+3; Do(x); 2*x} This is a block of statements. They execute when encountered unless @ is used in front. So @{; x = x+3; Do(x); 2*x} is a raw block that does not get executed until later. Same for case.  For functions, the RHS is not evaluated anyway until function called so it is cool. 
 { wahtever } should be interpreted as a multiline object. The @ form without a leading  semicolon is also to be understood this way. 
+
+## RiX Preference: Use camelCase for identifiers (e.g., myVar, someValue). 
+## Underscores (_) are treated as null operators, so snake_case will cause parse warnings.
 
 obj{= +a=3, -.b, +c } would take the map obj, add/change a to 3, remove key b, merge in the properties of c (assuming map, error if does not make sense). This generates a new object. To modify the existing option, open with !  obj{! +a=3, -.b, +c } 
 
