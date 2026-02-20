@@ -98,6 +98,23 @@ const symbols = [
   "?",
 ];
 
+/**
+ * Convert a character offset to {line, col} (both 1-indexed).
+ */
+function posToLineCol(input, pos) {
+  let line = 1;
+  let col = 1;
+  for (let i = 0; i < pos && i < input.length; i++) {
+    if (input[i] === "\n") {
+      line++;
+      col = 1;
+    } else {
+      col++;
+    }
+  }
+  return { line, col };
+}
+
 function tokenize(input) {
   const tokens = [];
   let position = 0;
@@ -123,10 +140,14 @@ function tokenize(input) {
 
     let token = null;
 
-    // Try to match numbers first (before comments, since numbers can contain #)
-    token = tryMatchNumber(input, position);
+    // Try comments FIRST (before numbers, to avoid # conflicts)
+    token = tryMatchComment(input, position);
     if (!token) {
-      // Try to match strings (quotes, backticks, comments)
+      // Try to match numbers first (before strings/identifiers)
+      token = tryMatchNumber(input, position);
+    }
+    if (!token) {
+      // Try to match strings (quotes, backticks)
       token = tryMatchString(input, position);
     }
     if (!token) {
@@ -152,7 +173,7 @@ function tokenize(input) {
       token.original = whitespace + token.original;
       // Update pos to account for whitespace - keep value position as set by token creators
       token.pos[0] = startPos;
-      // Don't override pos[1] for strings, as they set it correctly for delimiter handling
+      // Don't override pos[1] for strings or comments, as they set it correctly
       if (token.type !== "String") {
         token.pos[1] = position;
       }
@@ -177,22 +198,91 @@ function tokenize(input) {
   return tokens;
 }
 
+function tryMatchComment(input, position) {
+  const remaining = input.slice(position);
+
+  if (!remaining.startsWith("##")) return null;
+
+  // Potential multi-line comment: ##tag##
+  // Find the next ##
+  let tagEndIndex = -1;
+  let hasSpaceInTag = false;
+  for (let i = 2; i < remaining.length - 1; i++) {
+    if (remaining[i] === "#" && remaining[i + 1] === "#") {
+      tagEndIndex = i;
+      break;
+    }
+    if (/\s/.test(remaining[i])) {
+      hasSpaceInTag = true;
+      // We don't break yet, we might find a ## later and decide it's a line comment
+      // but the user requirement says "no spaces in the tag allowed up to ##"
+      // So if we find whitespace, it CANNOT be a tag.
+      break;
+    }
+  }
+
+  if (tagEndIndex !== -1 && !hasSpaceInTag) {
+    // Found a tag!
+    const tag = remaining.slice(2, tagEndIndex);
+    const normalizedTag = tag.toLowerCase();
+    const openDelimiter = `##${tag}##`;
+    const closeDelimiter = `##${normalizedTag}##`; // Not strictly how to search, we need to match it case-insensitively
+
+    // Search for the closing delimiter
+    let searchPos = tagEndIndex + 2;
+    while (searchPos < remaining.length - (normalizedTag.length + 4) + 1) {
+      // Look for the next ##
+      const potentialCloseStart = remaining.indexOf("##", searchPos);
+      if (potentialCloseStart === -1) break;
+
+      const potentialCloseTagEnd = remaining.indexOf(
+        "##",
+        potentialCloseStart + 2,
+      );
+      if (potentialCloseTagEnd === -1) break;
+
+      const foundTag = remaining
+        .slice(potentialCloseStart + 2, potentialCloseTagEnd)
+        .toLowerCase();
+      if (foundTag === normalizedTag) {
+        // Found it!
+        const totalLength = potentialCloseTagEnd + 2;
+        const value = remaining.slice(tagEndIndex + 2, potentialCloseStart);
+        return {
+          type: "String",
+          original: remaining.slice(0, totalLength),
+          value: value,
+          kind: "comment",
+          pos: [position, position + tagEndIndex + 2, position + totalLength],
+        };
+      }
+      searchPos = potentialCloseStart + 1;
+    }
+
+    // If we get here, it was meant to be a multi-line comment but was never closed
+    const { line, col } = posToLineCol(input, position);
+    throw new Error(
+      `Unclosed multi-line comment with tag "${tag}" at line ${line}:${col}`,
+    );
+  }
+
+  // If it's not a multi-line tag, it's a line comment
+  let lineEndIndex = remaining.indexOf("\n");
+  if (lineEndIndex === -1) lineEndIndex = remaining.length;
+
+  return {
+    type: "String",
+    original: remaining.slice(0, lineEndIndex),
+    value: remaining.slice(2, lineEndIndex),
+    kind: "comment",
+    pos: [position, position + 2, position + lineEndIndex],
+  };
+}
+
 function tryMatchString(input, position) {
   const remaining = input.slice(position);
 
-  // Try line comments (# marker)
-  const lineCommentMatch = remaining.match(/^#(.*)$/m);
-  if (lineCommentMatch) {
-    return {
-      type: "String",
-      original: lineCommentMatch[0],
-      value: lineCommentMatch[1],
-      kind: "comment",
-      pos: [position, position + 1, position + lineCommentMatch[0].length],
-    };
-  }
-
-  // Try block comments
+  // Block comments (/* ... */)
   const blockCommentMatch = remaining.match(/^\/(\*+)/);
   if (blockCommentMatch) {
     const starCount = blockCommentMatch[1].length;
@@ -214,9 +304,9 @@ function tryMatchString(input, position) {
       };
     }
     // If we reach here, block comment was not closed - throw error
-    const remainder = input.slice(position);
+    const { line, col } = posToLineCol(input, position);
     throw new Error(
-      `Delimiter unmatched. Need ${starCount} stars followed by slash. Remainder: "${remainder}" at position ${position}`,
+      `Delimiter unmatched at line ${line}:${col}. Need ${starCount} stars followed by slash.`,
     );
   }
 
@@ -243,9 +333,9 @@ function tryMatchString(input, position) {
       searchPos++;
     }
     // Unmatched quote delimiter - throw error only if we started parsing quotes
-    const remainder = input.slice(position);
+    const { line, col } = posToLineCol(input, position);
     throw new Error(
-      `Delimiter unmatched. Need ${quoteCount} closing quotes. Remainder: "${remainder}" at position ${position}`,
+      `Delimiter unmatched at line ${line}:${col}. Need ${quoteCount} closing quotes.`,
     );
   }
 
@@ -271,9 +361,9 @@ function tryMatchString(input, position) {
       searchPos++;
     }
     // Unmatched backtick delimiter - throw error only if we started parsing backticks
-    const remainder = input.slice(position);
+    const { line, col } = posToLineCol(input, position);
     throw new Error(
-      `Delimiter unmatched. Need ${backtickCount} closing backticks. Remainder: "${remainder}" at position ${position}`,
+      `Delimiter unmatched at line ${line}:${col}. Need ${backtickCount} closing backticks.`,
     );
   }
 
@@ -617,4 +707,4 @@ function tryMatchSymbol(input, position) {
   return null;
 }
 
-export { tokenize };
+export { tokenize, posToLineCol };

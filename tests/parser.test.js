@@ -2680,11 +2680,11 @@ describe("RiX Parser", () => {
 
   describe("Comments", () => {
     test("line comment only", () => {
-      const ast = parseCode("# This is a simple line comment");
+      const ast = parseCode("## This is a common line comment");
       expect(stripMetadata(ast)).toEqual([
         {
           type: "Comment",
-          value: " This is a simple line comment",
+          value: " This is a common line comment",
           kind: "comment",
         },
       ]);
@@ -2713,7 +2713,7 @@ describe("RiX Parser", () => {
     });
 
     test("comment before expression", () => {
-      const ast = parseCode("# Calculate sum\n2 + 3");
+      const ast = parseCode("## Calculate sum\n2 + 3");
       expect(stripMetadata(ast)).toEqual([
         {
           type: "Comment",
@@ -2730,7 +2730,7 @@ describe("RiX Parser", () => {
     });
 
     test("simple expression with trailing comment", () => {
-      const ast = parseCode("5\n# This is a comment");
+      const ast = parseCode("5\n## This is a comment");
       expect(stripMetadata(ast)).toEqual([
         {
           type: "Number",
@@ -2745,7 +2745,7 @@ describe("RiX Parser", () => {
     });
 
     test("multiple standalone comments", () => {
-      const ast = parseCode("# First comment\n# Second comment");
+      const ast = parseCode("## First comment\n## Second comment");
       expect(stripMetadata(ast)).toEqual([
         {
           type: "Comment",
@@ -2761,7 +2761,7 @@ describe("RiX Parser", () => {
     });
 
     test("comment between numbers", () => {
-      const ast = parseCode("5\n# comment\n10");
+      const ast = parseCode("5\n## comment\n10");
       expect(stripMetadata(ast)).toEqual([
         {
           type: "Number",
@@ -2779,6 +2779,17 @@ describe("RiX Parser", () => {
       ]);
     });
 
+    test("tag-based multi-line comment", () => {
+      const ast = parseCode("##TAG## some nested /* comment */ ##TAG##");
+      expect(stripMetadata(ast)).toEqual([
+        {
+          type: "Comment",
+          value: " some nested /* comment */ ",
+          kind: "comment",
+        },
+      ]);
+    });
+
     test("multiline block comment", () => {
       const ast = parseCode("/* This is a\n   multiline\n   comment */");
       expect(stripMetadata(ast)).toEqual([
@@ -2791,7 +2802,7 @@ describe("RiX Parser", () => {
     });
 
     test("comment with special characters", () => {
-      const ast = parseCode("# Comment with symbols: +*-/=<>{}[]()");
+      const ast = parseCode("## Comment with symbols: +*-/=<>{}[]()");
       expect(stripMetadata(ast)).toEqual([
         {
           type: "Comment",
@@ -2802,7 +2813,7 @@ describe("RiX Parser", () => {
     });
 
     test("empty line comment", () => {
-      const ast = parseCode("#");
+      const ast = parseCode("##");
       expect(stripMetadata(ast)).toEqual([
         {
           type: "Comment",
@@ -2824,7 +2835,7 @@ describe("RiX Parser", () => {
     });
 
     test("comment with statement terminator", () => {
-      const ast = parseCode("x := 5; # assignment comment");
+      const ast = parseCode("x := 5; ## assignment comment");
       expect(stripMetadata(ast)).toEqual([
         {
           type: "Statement",

@@ -57,7 +57,7 @@ describe("Math Oracle Tokenizer", () => {
 
   describe("Position information", () => {
     test("all tokens have pos field with correct positions", () => {
-      const tokens = tokenize('x + "hello" # comment');
+      const tokens = tokenize('x + "hello" ## comment');
 
       // x: starts at 0, value at 0, ends at 1
       expect(tokens[0].pos).toEqual([0, 0, 1]);
@@ -68,11 +68,11 @@ describe("Math Oracle Tokenizer", () => {
       // "hello": starts at 3 (including space), value at 5, ends at 11
       expect(tokens[2].pos).toEqual([3, 5, 11]);
 
-      // # comment: starts at 11 (including space), value at 13, ends at 21
-      expect(tokens[3].pos).toEqual([11, 13, 21]);
+      // ## comment: starts at 11 (including space), value at 14, ends at 22
+      expect(tokens[3].pos).toEqual([11, 14, 22]);
 
-      // End token: starts at 21, value at 21, ends at 21
-      expect(tokens[4].pos).toEqual([21, 21, 21]);
+      // End token: starts at 22, value at 22, ends at 22
+      expect(tokens[4].pos).toEqual([22, 22, 22]);
     });
 
     test("pos field for numbers with embedded #", () => {
@@ -881,7 +881,7 @@ describe("Math Oracle Tokenizer", () => {
       });
 
       test("unmatched empty quotes throw error", () => {
-        expect(() => tokenize('""')).toThrow("Delimiter unmatched. Need");
+        expect(() => tokenize('""')).toThrow("Delimiter unmatched at line 1:1. Need");
       });
 
       test("multiple quote delimiters", () => {
@@ -907,7 +907,7 @@ describe("Math Oracle Tokenizer", () => {
       });
 
       test("unmatched empty quotes throw error", () => {
-        expect(() => tokenize('""')).toThrow("Delimiter unmatched. Need");
+        expect(() => tokenize('""')).toThrow("Delimiter unmatched at line 1:1. Need");
       });
 
       test("multiple quote delimiters", () => {
@@ -1033,24 +1033,90 @@ describe("Math Oracle Tokenizer", () => {
 
     describe("comments", () => {
       test("line comments", () => {
-        const tokens = tokenize("# this is a comment\n# another comment");
+        const tokens = tokenize("## this is a comment\n## another comment");
         expect(tokens).toEqual(
           withEnd([
             {
               type: "String",
-              original: "# this is a comment",
+              original: "## this is a comment",
               value: " this is a comment",
               kind: "comment",
-              pos: [0, 1, 19],
+              pos: [0, 2, 20],
             },
             {
               type: "String",
-              original: "\n# another comment",
+              original: "\n## another comment",
               value: " another comment",
               kind: "comment",
-              pos: [19, 21, 37],
+              pos: [20, 23, 39],
             },
           ]),
+        );
+      });
+
+      test("multi-line tag comments", () => {
+        const tokens = tokenize("##TAG## multi\nline ##TAG##");
+        expect(tokens).toEqual(
+          withEnd([
+            {
+              type: "String",
+              original: "##TAG## multi\nline ##TAG##",
+              value: " multi\nline ",
+              kind: "comment",
+              pos: [0, 7, 26],
+            },
+          ]),
+        );
+      });
+
+      test("case-insensitive tag matching", () => {
+        const tokens = tokenize("##CamelCase## mixed case ##camelcase##");
+        expect(tokens).toEqual(
+          withEnd([
+            {
+              type: "String",
+              original: "##CamelCase## mixed case ##camelcase##",
+              value: " mixed case ",
+              kind: "comment",
+              pos: [0, 13, 38],
+            },
+          ]),
+        );
+      });
+
+      test("nested-style comments with different tags", () => {
+        const tokens = tokenize("##OUTER## outer ##INNER## inner ##INNER## outer ##OUTER##");
+        expect(tokens).toEqual(
+          withEnd([
+            {
+              type: "String",
+              original: "##OUTER## outer ##INNER## inner ##INNER## outer ##OUTER##",
+              value: " outer ##INNER## inner ##INNER## outer ",
+              kind: "comment",
+              pos: [0, 9, 57],
+            },
+          ]),
+        );
+      });
+
+      test("## with space is a line comment, not a tag", () => {
+        const tokens = tokenize("## tag ## this is just a line comment");
+        expect(tokens).toEqual(
+          withEnd([
+            {
+              type: "String",
+              original: "## tag ## this is just a line comment",
+              value: " tag ## this is just a line comment",
+              kind: "comment",
+              pos: [0, 2, 37],
+            },
+          ]),
+        );
+      });
+
+      test("unclosed multi-line comment throws error with line:col", () => {
+        expect(() => tokenize("##TAG## forgotten close")).toThrow(
+          'Unclosed multi-line comment with tag "TAG" at line 1:1',
         );
       });
 
@@ -1493,6 +1559,58 @@ describe("Math Oracle Tokenizer", () => {
       );
     });
 
+    test("number with hash prefix", () => {
+      const tokens = tokenize("#123");
+      expect(tokens).toEqual(
+        withEnd([
+          { type: "Symbol", original: "#", value: "#", pos: [0, 0, 1] },
+          { type: "Number", original: "123", value: "123", pos: [1, 1, 4] },
+        ]),
+      );
+    });
+
+    test("mixed tokens with comments", () => {
+      const tokens = tokenize("x = 5; ## set x to 5\ny = 10; ## set y to 10");
+      expect(tokens).toEqual(
+        withEnd([
+          {
+            type: "Identifier",
+            original: "x",
+            value: "x",
+            kind: "User",
+            pos: [0, 0, 1],
+          },
+          { type: "Symbol", original: " =", value: "=", pos: [1, 2, 3] },
+          { type: "Number", original: " 5", value: "5", pos: [3, 4, 5] },
+          { type: "Symbol", original: ";", value: ";", pos: [5, 5, 6] },
+          {
+            type: "String",
+            original: " ## set x to 5",
+            value: " set x to 5",
+            kind: "comment",
+            pos: [6, 9, 20],
+          },
+          {
+            type: "Identifier",
+            original: "\ny",
+            value: "y",
+            kind: "User",
+            pos: [20, 21, 22],
+          },
+          { type: "Symbol", original: " =", value: "=", pos: [22, 23, 24] },
+          { type: "Number", original: " 10", value: "10", pos: [24, 25, 27] },
+          { type: "Symbol", original: ";", value: ";", pos: [27, 27, 28] },
+          {
+            type: "String",
+            original: " ## set y to 10",
+            value: " set y to 10",
+            kind: "comment",
+            pos: [28, 31, 43],
+          },
+        ]),
+      );
+    });
+
     test("interval with mixed types", () => {
       const tokens = tokenize("1..3/4:2.5#6");
       expect(tokens).toEqual(
@@ -1508,7 +1626,7 @@ describe("Math Oracle Tokenizer", () => {
     });
 
     test("mixed tokens with comments", () => {
-      const tokens = tokenize("x + 2 /* addition */ # line comment\n:= 5");
+      const tokens = tokenize("x + 2 /* addition */ ## line comment\n:= 5");
       expect(tokens).toEqual(
         withEnd([
           {
@@ -1529,13 +1647,13 @@ describe("Math Oracle Tokenizer", () => {
           },
           {
             type: "String",
-            original: " # line comment",
+            original: " ## line comment",
             value: " line comment",
             kind: "comment",
-            pos: [20, 22, 35],
+            pos: [20, 23, 36],
           },
-          { type: "Symbol", original: "\n:=", value: ":=", pos: [35, 36, 38] },
-          { type: "Number", original: " 5", value: "5", pos: [38, 39, 40] },
+          { type: "Symbol", original: "\n:=", value: ":=", pos: [36, 37, 39] },
+          { type: "Number", original: " 5", value: "5", pos: [39, 40, 41] },
         ]),
       );
     });
@@ -1602,19 +1720,19 @@ describe("Math Oracle Tokenizer", () => {
   describe("Edge cases and error handling", () => {
     test("unmatched quotes throw error", () => {
       expect(() => tokenize('x + "unclosed string')).toThrow(
-        "Delimiter unmatched. Need",
+        "Delimiter unmatched at line 1:5. Need",
       );
     });
 
     test("unmatched backticks throw error", () => {
       expect(() => tokenize("x + `unclosed backtick")).toThrow(
-        "Delimiter unmatched. Need",
+        "Delimiter unmatched at line 1:5. Need",
       );
     });
 
     test("unmatched block comment throws error", () => {
       expect(() => tokenize("x + /* unclosed comment")).toThrow(
-        "Delimiter unmatched. Need",
+        "Delimiter unmatched at line 1:5. Need",
       );
     });
 
@@ -1876,7 +1994,7 @@ describe("Math Oracle Tokenizer", () => {
         "Sin(x) := x^2",
         "3/4 + 1..2/3",
         '"hello world" + `F:3/4`',
-        "/* comment */ # line comment",
+        "/* comment */ ## line comment",
         "1.23E-5~m/s~ + αβγ",
         ".5 + -.25",
       ];

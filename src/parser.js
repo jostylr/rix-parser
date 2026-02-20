@@ -3,7 +3,7 @@
  * Implements a Pratt parser for the RiX mathematical expression language
  */
 
-import { tokenize } from "./tokenizer.js";
+import { tokenize, posToLineCol } from "./tokenizer.js";
 
 // Precedence levels (higher numbers bind tighter)
 const PRECEDENCE = {
@@ -352,7 +352,7 @@ const SYMBOL_TABLE = {
   // Double-dot (external property access)
   "..": { precedence: PRECEDENCE.PROPERTY, associativity: "left", type: "infix" },
   // Dot-pipe operators
-  ".|":  { precedence: PRECEDENCE.PROPERTY, associativity: "left", type: "postfix" },
+  ".|": { precedence: PRECEDENCE.PROPERTY, associativity: "left", type: "postfix" },
   "|.": { precedence: PRECEDENCE.PROPERTY, associativity: "left", type: "postfix" },
 
   // Separators
@@ -365,9 +365,10 @@ const SYMBOL_TABLE = {
 };
 
 class Parser {
-  constructor(tokens, systemLookup) {
+  constructor(tokens, systemLookup, source = "") {
     this.tokens = tokens;
     this.systemLookup = systemLookup || (() => ({ type: "identifier" }));
+    this.source = source;
     this.position = 0;
     this.current = null;
     this.advance();
@@ -406,6 +407,10 @@ class Parser {
 
   error(message) {
     const pos = this.current ? this.current.pos : [0, 0, 0];
+    if (this.source) {
+      const { line, col } = posToLineCol(this.source, pos[0]);
+      throw new Error(`Parse error at line ${line}, column ${col} (position ${pos[0]}): ${message}`);
+    }
     throw new Error(`Parse error at position ${pos[0]}: ${message}`);
   }
 
@@ -495,7 +500,7 @@ class Parser {
           return this.parseArray();
         } else if (token.value === "{") {
           return this.parseBraceContainer();
-        } else if (token.value === "{{" ) {
+        } else if (token.value === "{{") {
           return this.parseCodeBlock();
         } else if (token.value === "{=" || token.value === "{?" || token.value === "{;" || token.value === "{|" || token.value === "{:" || token.value === "{@") {
           return this.parseBraceSigil(token.value);
@@ -2732,11 +2737,13 @@ class Parser {
 // Main parse function
 export function parse(input, systemLookup) {
   let tokens;
+  let source = "";
   if (typeof input === "string") {
+    source = input;
     tokens = tokenize(input);
   } else {
     tokens = input;
   }
-  const parser = new Parser(tokens, systemLookup);
+  const parser = new Parser(tokens, systemLookup, source);
   return parser.parse();
 }
