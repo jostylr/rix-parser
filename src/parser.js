@@ -69,6 +69,7 @@ const SYMBOL_TABLE = {
   "|>": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
   "||>": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
   "|>>": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
+  "|:>": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
   "|>:": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
   "|>?": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
   "|><": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
@@ -921,6 +922,25 @@ class Parser {
         right: right,
         pos: left.pos,
         original: left.original + operator.original,
+      });
+    } else if (operator.value === "|:>") {
+      // Reduce operator with explicit init: list |:> init >: fn
+      const startValue = this.parseExpression(rightPrec);
+
+      const nextOp = this.current;
+      if (nextOp.type !== "Symbol" || nextOp.value !== ">:") {
+        this.error("Expected '>:' after start value in '|:>' reduce expression, found " + nextOp.value);
+      } else {
+        this.advance(); // consume `>:`
+      }
+
+      const fnExpr = this.parseExpression(rightPrec);
+      return this.createNode("Reduce", {
+        left: left,
+        init: startValue,
+        right: fnExpr,
+        pos: left.pos,
+        original: left.original + operator.original + startValue.original + (nextOp.value === ">:" ? nextOp.original : "") + fnExpr.original,
       });
     } else if (operator.value === "|>:") {
       // Reduce operator: list |>: fn (first element as init)
