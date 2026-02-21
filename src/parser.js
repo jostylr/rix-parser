@@ -71,6 +71,8 @@ const SYMBOL_TABLE = {
   "|>>": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
   "|>:": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
   "|>?": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
+  "|><": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
+  "|<>": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
   "|+": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
   "|*": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
   "|:": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
@@ -921,9 +923,26 @@ class Parser {
         original: left.original + operator.original,
       });
     } else if (operator.value === "|>:") {
-      // Reduce operator
+      // Reduce operator: list |>: fn (first element as init)
+      // For explicit init value, use REDUCE(list, fn, init) function call
       right = this.parseExpression(rightPrec);
       return this.createNode("Reduce", {
+        left: left,
+        right: right,
+        pos: left.pos,
+        original: left.original + operator.original,
+      });
+    } else if (operator.value === "|><") {
+      // Reverse operator (no right operand needed)
+      return this.createNode("Reverse", {
+        target: left,
+        pos: left.pos,
+        original: left.original + operator.original,
+      });
+    } else if (operator.value === "|<>") {
+      // Sort operator: list |<> fn (comparator function)
+      right = this.parseExpression(rightPrec);
+      return this.createNode("Sort", {
         left: left,
         right: right,
         pos: left.pos,
