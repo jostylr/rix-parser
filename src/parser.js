@@ -896,6 +896,20 @@ class Parser {
           pos: left.pos,
           original: left.original + operator.original,
         });
+      } else if (left.type === "UserIdentifier") {
+        // Handle unparenthesized single parameter: x -> expr
+        let parameters = {
+          positional: [{ name: left.name, defaultValue: null }],
+          keyword: [],
+          conditionals: [],
+          metadata: {},
+        };
+        return this.createNode("FunctionLambda", {
+          parameters: parameters,
+          body: right,
+          pos: left.pos,
+          original: left.original + operator.original,
+        });
       } else {
         // Regular binary operation
         return this.createNode("BinaryOperation", {
@@ -1186,14 +1200,23 @@ class Parser {
     let hasComma = false;
     let tempPos = this.position;
     let parenDepth = 0;
+    let braceDepth = 0;
+    let bracketDepth = 0;
 
     while (tempPos < this.tokens.length) {
       const token = this.tokens[tempPos];
+
       if (token.value === "(") parenDepth++;
       else if (token.value === ")") {
         if (parenDepth === 0) break;
         parenDepth--;
-      } else if (parenDepth === 0) {
+      }
+      else if (typeof token.value === 'string' && token.value.startsWith("{") && token.value !== "}}") braceDepth++;
+      else if (token.value === "}" || token.value === "}}") braceDepth--;
+      else if (token.value === "[") bracketDepth++;
+      else if (token.value === "]") bracketDepth--;
+
+      else if (parenDepth === 0 && braceDepth <= 0 && bracketDepth <= 0) {
         if (token.value === ";") {
           hasSemicolon = true;
           break;
@@ -1439,7 +1462,16 @@ class Parser {
         continue;
       }
 
-      const symbolInfo = this.getSymbolInfo(this.current);
+      let symbolInfo = this.getSymbolInfo(this.current);
+
+      // Disambiguate `->` operator precedence:
+      // Function definitions like `F(x) -> ...` need loose precedence (assignment).
+      // Lambdas like `x -> ...` need tight precedence (arrow) to bind inside pipes.
+      if (symbolInfo && this.current.value === "->") {
+        if (left.type === "FunctionCall" || left.type === "ImplicitMultiplication") {
+          symbolInfo = { ...symbolInfo, precedence: PRECEDENCE.ASSIGNMENT };
+        }
+      }
 
       if (!symbolInfo || symbolInfo.precedence < minPrec) {
         break;
