@@ -532,7 +532,7 @@ class Parser {
           return this.parseCodeBlock();
         } else if (token.value === "{=" || token.value === "{?" || token.value === "{;" || token.value === "{|" || token.value === "{:" || token.value === "{@") {
           return this.parseBraceSigil(token.value);
-        } else if (token.value === "{+" || token.value === "{*") {
+        } else if (token.value === "{+" || token.value === "{*" || token.value === "{&&" || token.value === "{||") {
           return this.parseOperatorBrace(token.value);
         } else if (token.value === "{!") {
           return this.parseBraceSigil(token.value);
@@ -1828,7 +1828,12 @@ class Parser {
     }
     this.advance();
 
-    const sysName = sigil === "{+" ? "ADD" : "MUL";
+    let sysName;
+    if (sigil === "{+") sysName = "ADD";
+    else if (sigil === "{*") sysName = "MUL";
+    else if (sigil === "{&&") sysName = "AND";
+    else if (sigil === "{||") sysName = "OR";
+
     return this.createNode("FunctionCall", {
       function: this.createNode("SystemIdentifier", {
         name: sysName,

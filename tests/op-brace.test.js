@@ -51,4 +51,16 @@ describe("N-ary operator braces and logically aliases", () => {
     expect(result[0].expression.operator).toBe("||");
     expect(result[0].expression.left.operator).toBe("&&");
   });
+  test("{&& 1, 0}", () => {
+    const result = stripMetadata(parseCode("{&& 1, 0, 1};"));
+    expect(result[0].expression.type).toBe("FunctionCall");
+    expect(result[0].expression.function.name).toBe("AND");
+    expect(result[0].expression.arguments.positional.length).toBe(3);
+  });
+  test("{|| 0, 1}", () => {
+    const result = stripMetadata(parseCode("{|| 0, 1};"));
+    expect(result[0].expression.type).toBe("FunctionCall");
+    expect(result[0].expression.function.name).toBe("OR");
+    expect(result[0].expression.arguments.positional.length).toBe(2);
+  });
 });
