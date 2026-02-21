@@ -72,6 +72,8 @@ const SYMBOL_TABLE = {
   "|:>": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
   "|>:": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
   "|>?": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
+  "|>&&": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
+  "|>||": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
   "|><": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
   "|<>": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
   "|+": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
@@ -936,6 +938,24 @@ class Parser {
       // Filter operator
       right = this.parseExpression(rightPrec);
       return this.createNode("Filter", {
+        left: left,
+        right: right,
+        pos: left.pos,
+        original: left.original + operator.original,
+      });
+    } else if (operator.value === "|>&&") {
+      // Every (all) operator
+      right = this.parseExpression(rightPrec);
+      return this.createNode("Every", {
+        left: left,
+        right: right,
+        pos: left.pos,
+        original: left.original + operator.original,
+      });
+    } else if (operator.value === "|>||") {
+      // Some (any) operator
+      right = this.parseExpression(rightPrec);
+      return this.createNode("Some", {
         left: left,
         right: right,
         pos: left.pos,
