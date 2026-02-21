@@ -546,7 +546,7 @@ class Parser {
             name: "@",
             original: token.original,
           });
-        } else if (token.value === "+" || token.value === "-") {
+        } else if (token.value === "+" || token.value === "-" || token.value === "!") {
           // Check if this is a function call (operator followed by parentheses)
           if (this.peek().value === "(") {
             // Treat as identifier for function call syntax
@@ -1423,7 +1423,7 @@ class Parser {
   }
 
   isGeneratorOperator(value) {
-    return ["|+", "|*", "|:", "|?", "|^", "|^:"].includes(value);
+    return ["|+", "|*", "|:", "|?", "|^", "|^:", "|;", "|>"].includes(value);
   }
 
   createGeneratorOperatorNode(operator, operand, token) {
@@ -1434,6 +1434,8 @@ class Parser {
       "|?": "GeneratorFilter",
       "|^": "GeneratorLimit",
       "|^:": "GeneratorLazyLimit",
+      "|;": "GeneratorEagerLimit",
+      "|>": "GeneratorPipe",
     };
 
     return this.createNode(typeMap[operator], {
