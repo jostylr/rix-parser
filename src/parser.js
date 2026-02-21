@@ -375,22 +375,31 @@ class Parser {
   }
 
   advance() {
-    if (this.position < this.tokens.length) {
-      this.current = this.tokens[this.position];
-      this.position++;
-    } else {
-      this.current = {
-        type: "End",
-        value: null,
-        pos: [this.tokens.length, this.tokens.length, this.tokens.length],
-      };
-    }
+    do {
+      if (this.position < this.tokens.length) {
+        this.current = this.tokens[this.position];
+        this.position++;
+      } else {
+        this.current = {
+          type: "End",
+          value: null,
+          pos: [this.tokens.length, this.tokens.length, this.tokens.length],
+        };
+        break;
+      }
+    } while (this.current.type === "String" && this.current.kind === "comment");
     return this.current;
   }
 
   peek() {
-    if (this.position < this.tokens.length) {
-      return this.tokens[this.position];
+    let tempPos = this.position;
+    while (tempPos < this.tokens.length) {
+      const token = this.tokens[tempPos];
+      if (token.type === "String" && token.kind === "comment") {
+        tempPos++;
+        continue;
+      }
+      return token;
     }
     return { type: "End", value: null };
   }
@@ -1269,10 +1278,6 @@ class Parser {
         break;
       }
 
-      // Treat comments as expression terminators
-      if (this.current.type === "String" && this.current.kind === "comment") {
-        break;
-      }
 
       // Special case for function calls - now works on any expression
       if (this.current.value === "(") {
