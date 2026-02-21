@@ -227,11 +227,8 @@ describe("Phase 1 Parser", () => {
       expect(expr.name.name).toBe("F");
     });
 
-    test("operator +(a, b) is still FunctionCall", () => {
-      const expr = stripMetadata(parseCode("+(a, b);"))[0].expression;
-      expect(expr.type).toBe("FunctionCall");
-      expect(expr.function.name).toBe("+");
-    });
+
+
   });
 
   describe("@_ SystemCall", () => {

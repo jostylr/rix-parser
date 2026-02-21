@@ -40,6 +40,8 @@ const symbols = [
   "{{",
   "}}",
   // Brace sigil containers (must come before single {)
+  "{+",
+  "{*",
   "{=",
   "{?",
   "{;",
@@ -50,6 +52,8 @@ const symbols = [
   ">=",
   "==",
   "!=",
+  "&&",
+  "||",
   ">:",
   "->",
   "=>",

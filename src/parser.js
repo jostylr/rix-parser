@@ -146,6 +146,18 @@ const SYMBOL_TABLE = {
     type: "infix",
   },
 
+  // Logical aliases
+  "&&": {
+    precedence: PRECEDENCE.LOGICAL_AND,
+    associativity: "left",
+    type: "infix",
+  },
+  "||": {
+    precedence: PRECEDENCE.LOGICAL_OR,
+    associativity: "left",
+    type: "infix",
+  },
+
   // Interval operators / ternary colon
   ":": {
     precedence: PRECEDENCE.INTERVAL,
@@ -520,6 +532,8 @@ class Parser {
           return this.parseCodeBlock();
         } else if (token.value === "{=" || token.value === "{?" || token.value === "{;" || token.value === "{|" || token.value === "{:" || token.value === "{@") {
           return this.parseBraceSigil(token.value);
+        } else if (token.value === "{+" || token.value === "{*") {
+          return this.parseOperatorBrace(token.value);
         } else if (token.value === "{!") {
           return this.parseBraceSigil(token.value);
         } else if (token.value === "@") {
@@ -541,23 +555,32 @@ class Parser {
               original: token.original,
             });
           }
+
+          // Feature: @+ directly references ADD system function, @* to MUL, etc.
+          const operatorToSystem = {
+            "+": "ADD", "-": "SUB", "*": "MUL", "/": "DIV", "//": "INTDIV", "%": "MOD", "^": "POW",
+            "=": "EQ", "!=": "NEQ", "<": "LT", ">": "GT", "<=": "LTE", ">=": "GTE",
+            "&&": "AND", "||": "OR", "!": "NOT"
+          };
+
+          if (operatorToSystem[nextVal]) {
+            const opToken = this.current;
+            this.advance(); // consume the operator symbol
+            const sysName = operatorToSystem[nextVal];
+            return this.createNode("SystemIdentifier", {
+              name: sysName,
+              systemInfo: this.systemLookup(sysName),
+              original: token.original + opToken.original
+            });
+          }
+
           // Bare @ — treat as user identifier for postfix @(...) syntax
           return this.createNode("UserIdentifier", {
             name: "@",
             original: token.original,
           });
         } else if (token.value === "+" || token.value === "-" || token.value === "!") {
-          // Check if this is a function call (operator followed by parentheses)
-          if (this.peek().value === "(") {
-            // Treat as identifier for function call syntax
-            this.advance();
-            return this.createNode("UserIdentifier", {
-              name: token.value,
-              original: token.original,
-            });
-          } else {
-            return this.parseUnaryOperator();
-          }
+          return this.parseUnaryOperator();
         } else if (token.value === "'") {
           // Leading quote for integral
           return this.parseIntegral();
@@ -568,12 +591,7 @@ class Parser {
             original: token.original,
           });
         } else {
-          // Treat other symbols as user identifiers for function call syntax
-          this.advance();
-          return this.createNode("UserIdentifier", {
-            name: token.value,
-            original: token.original,
-          });
+          this.error(`Unexpected token in prefix position: ${token.value}`);
         }
         break;
 
@@ -1781,6 +1799,48 @@ class Parser {
       elements: elements,
       pos: startToken.pos,
       original: startToken.original,
+    });
+  }
+
+  parseOperatorBrace(sigil) {
+    const startToken = this.current;
+    this.advance(); // consume '{+' or '{*'
+
+    const elements = [];
+    if (this.current.value !== "}") {
+      do {
+        if (this.current.value === ",") {
+          this.advance();
+          continue;
+        }
+        elements.push(this.parseExpression(0));
+
+        if (this.current.value === ",") {
+          this.advance();
+        } else if (this.current.value !== "}") {
+          this.error("Expected ',' or '}' in brace sequence");
+        }
+      } while (this.current.value !== "}" && this.current.type !== "End");
+    }
+
+    if (this.current.value !== "}") {
+      this.error("Expected '}'");
+    }
+    this.advance();
+
+    const sysName = sigil === "{+" ? "ADD" : "MUL";
+    return this.createNode("FunctionCall", {
+      function: this.createNode("SystemIdentifier", {
+        name: sysName,
+        systemInfo: this.systemLookup(sysName),
+        original: sigil,
+      }),
+      arguments: {
+        positional: elements,
+        keyword: {}
+      },
+      pos: startToken.pos,
+      original: sigil,
     });
   }
 
