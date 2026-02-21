@@ -371,6 +371,7 @@ class Parser {
     this.source = source;
     this.position = 0;
     this.current = null;
+    this.skippedComments = [];
     this.advance();
   }
 
@@ -386,6 +387,9 @@ class Parser {
           pos: [this.tokens.length, this.tokens.length, this.tokens.length],
         };
         break;
+      }
+      if (this.current.type === "String" && this.current.kind === "comment") {
+        this.skippedComments.push(this.current);
       }
     } while (this.current.type === "String" && this.current.kind === "comment");
     return this.current;
@@ -2543,12 +2547,31 @@ class Parser {
     return expr;
   }
 
+  // Drain any buffered comments into the statements array
+  drainComments(statements) {
+    while (this.skippedComments.length > 0) {
+      const commentToken = this.skippedComments.shift();
+      statements.push(
+        this.createNode("Comment", {
+          value: commentToken.value,
+          kind: commentToken.kind,
+          original: commentToken.original,
+          pos: commentToken.pos,
+        }),
+      );
+    }
+  }
+
   // Parse the entire program (array of statements)
   parse() {
     const statements = [];
 
+    // Drain any comments collected during constructor's initial advance()
+    this.drainComments(statements);
+
     while (this.current.type !== "End") {
-      // Collect standalone comments
+      // Collect standalone comments (shouldn't normally be reached since advance skips them,
+      // but kept for safety)
       if (this.current.type === "String" && this.current.kind === "comment") {
         const commentToken = this.current;
         this.advance();
@@ -2560,6 +2583,7 @@ class Parser {
             pos: commentToken.pos,
           }),
         );
+        this.drainComments(statements);
         continue;
       }
 
@@ -2567,6 +2591,8 @@ class Parser {
       if (stmt) {
         statements.push(stmt);
       }
+      // Drain any comments that were skipped during expression parsing
+      this.drainComments(statements);
     }
 
     return statements;
