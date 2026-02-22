@@ -413,7 +413,7 @@ function tryMatchNumber(input, position) {
 
   // Prefix Interval: 0x1:0xA or 0x1:10
   match = remaining.match(
-    /^-?(?:0[a-zA-Z][0-9a-zA-Z]*(?:\.[0-9a-zA-Z]*)?|(?:\d+\.\.\d+\/\d+|\d+\.\d+#\d+|\.\d+#\d+|\d+#\d+|\d+\/\d+|\d+\.\d+|\.\d+|\d+)):-?(?:0[a-zA-Z][0-9a-zA-Z]*(?:\.[0-9a-zA-Z]*)?|(?:\d+\.\.\d+\/\d+|\d+\.\d+#\d+|\.\d+#\d+|\d+#\d+|\d+\/\d+|\d+\.\d+|\.\d+|\d+))/,
+    /^-?(?:(?:0z\[\d+\]|0[a-zA-Z])[0-9a-zA-Z]*(?:\.[0-9a-zA-Z]*)?|(?:\d+\.\.\d+\/\d+|\d+\.\d+#\d+|\.\d+#\d+|\d+#\d+|\d+\/\d+|\d+\.\d+|\.\d+|\d+)):-?(?:(?:0z\[\d+\]|0[a-zA-Z])[0-9a-zA-Z]*(?:\.[0-9a-zA-Z]*)?|(?:\d+\.\.\d+\/\d+|\d+\.\d+#\d+|\.\d+#\d+|\d+#\d+|\d+\/\d+|\d+\.\d+|\.\d+|\d+))/,
   );
   if (match) {
     return {
@@ -425,7 +425,7 @@ function tryMatchNumber(input, position) {
   }
 
   // Prefix Mixed Number: 0xA..B/C or 0xA..0xB/0xC
-  match = remaining.match(/^-?0[a-zA-Z][0-9a-zA-Z]*\.\.0?[a-zA-Z]?[0-9a-zA-Z]*\/0?[a-zA-Z]?[0-9a-zA-Z]*/);
+  match = remaining.match(/^-?(?:0z\[\d+\]|0[a-zA-Z])[0-9a-zA-Z]*\.\.(?:0z\[\d+\]|0[a-zA-Z])?[0-9a-zA-Z]*\/(?:0z\[\d+\]|0[a-zA-Z])?[0-9a-zA-Z]*/);
   if (match) {
     return {
       type: "Number",
@@ -436,7 +436,7 @@ function tryMatchNumber(input, position) {
   }
 
   // Prefix Rational: 0xA/0xB or 0xA/B or A/0xB
-  match = remaining.match(/^-?0[a-zA-Z][0-9a-zA-Z]*\/0?[a-zA-Z]?[0-9a-zA-Z]*/);
+  match = remaining.match(/^-?(?:0z\[\d+\]|0[a-zA-Z])[0-9a-zA-Z]*\/(?:0z\[\d+\]|0[a-zA-Z])?[0-9a-zA-Z]*/);
   if (match) {
     return {
       type: "Number",
@@ -447,7 +447,7 @@ function tryMatchNumber(input, position) {
   }
 
   // Prefix Decimal: 0xA.B
-  match = remaining.match(/^-?0[a-zA-Z][0-9a-zA-Z]*\.[0-9a-zA-Z]*/);
+  match = remaining.match(/^-?(?:0z\[\d+\]|0[a-zA-Z])[0-9a-zA-Z]*\.[0-9a-zA-Z]*/);
   if (match) {
     return {
       type: "Number",
@@ -457,19 +457,8 @@ function tryMatchNumber(input, position) {
     };
   }
 
-  // Custom base: 0z[N]digits where N is the base number
-  match = remaining.match(/^-?0z\[\d+\][0-9a-zA-Z]*/);
-  if (match) {
-    return {
-      type: "Number",
-      original: match[0],
-      value: match[0],
-      pos: [position, position, position + match[0].length],
-    };
-  }
-
-  // Prefix Integer: 0xA, 0b101
-  match = remaining.match(/^-?0[a-zA-Z][0-9a-zA-Z]*/);
+  // Prefix Integer: 0xA, 0b101, 0z[10]10
+  match = remaining.match(/^-?(?:0z\[\d+\]|0[a-zA-Z])[0-9a-zA-Z]*/);
   if (match) {
     return {
       type: "Number",
