@@ -385,8 +385,9 @@ const SYMBOL_TABLE = {
   ";": {
     precedence: PRECEDENCE.STATEMENT,
     associativity: "left",
-    type: "statement",
   },
+  "|": { precedence: 0, type: "separator" },
+  "|}": { precedence: 0, type: "separator" },
 };
 
 class Parser {
@@ -1935,11 +1936,17 @@ class Parser {
     // Determine separator: temporal (;) vs spatial (,)
     const temporalSigils = new Set(["{?", "{;", "{@"]);
     const isTemporal = temporalSigils.has(sigil);
+    const closerMap = {
+      "{|": ["|}", "}"],
+    };
+    const closers = closerMap[sigil] || ["}"];
+    const primaryCloser = closers[0];
+    const isCloser = (val) => closers.includes(val);
     const separator = isTemporal ? ";" : ",";
 
     const elements = [];
 
-    if (this.current.value !== "}") {
+    if (!isCloser(this.current.value)) {
       do {
         // Handle leading separators (empty slots)
         if (this.current.value === separator) {
@@ -1953,32 +1960,31 @@ class Parser {
         // Check for separator
         if (this.current.value === separator) {
           this.advance();
-          // Allow trailing separator before }
-          if (this.current.value === "}") {
+          // Allow trailing separator before closer
+          if (isCloser(this.current.value)) {
             break;
           }
-        } else if (this.current.value === "}") {
+        } else if (isCloser(this.current.value)) {
           break;
         } else if (this.current.type === "End") {
-          this.error(`Expected closing } for ${nodeType}`);
+          this.error(`Expected closing ${primaryCloser} for ${nodeType}`);
         } else {
           // Also accept the other separator type for flexibility
           const altSep = isTemporal ? "," : ";";
           if (this.current.value === altSep) {
             this.advance();
-            if (this.current.value === "}") break;
+            if (isCloser(this.current.value)) break;
           } else {
             break;
           }
         }
-      } while (this.current.value !== "}" && this.current.type !== "End");
+      } while (!isCloser(this.current.value) && this.current.type !== "End");
     }
 
-    if (this.current.value !== "}") {
-      this.error(`Expected closing } for ${nodeType}`);
+    if (!isCloser(this.current.value)) {
+      this.error(`Expected closing ${primaryCloser} for ${nodeType}`);
     }
-    this.advance(); // consume '}'
-
+    this.advance(); // consume closer
     return this.createNode(nodeType, {
       sigil: sigil,
       elements: elements,
