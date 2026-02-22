@@ -335,6 +335,78 @@ describe("Math Oracle Tokenizer", () => {
         ),
       );
     });
+
+    test("snake_case identifiers", () => {
+      const tokens = tokenize("my_var _leading var_ trailing_ _");
+      expect(tokens).toEqual(
+        withEnd(
+          [
+            {
+              type: "Identifier",
+              original: "my_var",
+              value: "my_var",
+              kind: "User",
+              pos: [0, 0, 6],
+            },
+            {
+              type: "Identifier",
+              original: " _leading",
+              value: "_leading",
+              kind: "User",
+              pos: [6, 7, 15],
+            },
+            {
+              type: "Identifier",
+              original: " var_",
+              value: "var_",
+              kind: "User",
+              pos: [15, 16, 20],
+            },
+            {
+              type: "Identifier",
+              original: " trailing_",
+              value: "trailing_",
+              kind: "User",
+              pos: [20, 21, 30],
+            },
+            {
+              type: "Symbol",
+              original: " _",
+              value: "_",
+              pos: [30, 31, 32],
+            },
+          ],
+          "",
+          32,
+        ),
+      );
+    });
+
+    test("system snake_case identifiers", () => {
+      const tokens = tokenize("My_Var _Leading_Cap");
+      expect(tokens).toEqual(
+        withEnd(
+          [
+            {
+              type: "Identifier",
+              original: "My_Var",
+              value: "MY_VAR",
+              kind: "System",
+              pos: [0, 0, 6],
+            },
+            {
+              type: "Identifier",
+              original: " _Leading_Cap",
+              value: "_LEADING_CAP",
+              kind: "System",
+              pos: [6, 7, 19],
+            },
+          ],
+          "",
+          19,
+        ),
+      );
+    });
   });
 
   describe("Number tokens", () => {

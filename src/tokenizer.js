@@ -4,8 +4,8 @@
  */
 
 // Unicode patterns for identifiers
-const identifierStart = /[\p{L}]/u;
-const identifierPart = /[\p{L}\p{N}]/u;
+const identifierStart = /[\p{L}_]/u;
+const identifierPart = /[\p{L}\p{N}_]/u;
 
 // Symbol patterns (sorted longest to shortest for maximal munch)
 const symbols = [
@@ -600,7 +600,7 @@ function tryMatchSystemFunctionRef(input, position) {
     const original = remaining.slice(0, length);
     const name = remaining.slice(2, length); // Strip @_ prefix for value
     // System function refs are always uppercase-normalized
-    const value = name[0].toUpperCase() + name.slice(1).toUpperCase();
+    const value = name.toUpperCase();
     return {
       type: "Identifier",
       original: original,
@@ -629,7 +629,6 @@ function tryMatchIdentifier(input, position) {
         pos: [position, position, position + original.length],
       };
     }
-    return null;
   }
 
   // Check if first character is a valid identifier start
@@ -643,17 +642,24 @@ function tryMatchIdentifier(input, position) {
   }
 
   const original = remaining.slice(0, length);
-  const firstChar = original[0];
-  const isCapital = firstChar.toUpperCase() === firstChar;
+
+  if (original === "_") {
+    return null; // standalone underscore is a symbol/null, not an identifier
+  }
+
+  let firstLetter = null;
+  for (let i = 0; i < original.length; i++) {
+    if (/[\p{L}]/u.test(original[i])) {
+      firstLetter = original[i];
+      break;
+    }
+  }
+
+  const isCapital = firstLetter !== null && firstLetter.toUpperCase() === firstLetter;
   const kind = isCapital ? "System" : "User";
 
   // Normalize case: convert rest to match first character's case
-  let value;
-  if (isCapital) {
-    value = firstChar + original.slice(1).toUpperCase();
-  } else {
-    value = firstChar + original.slice(1).toLowerCase();
-  }
+  const value = isCapital ? original.toUpperCase() : original.toLowerCase();
 
   return {
     type: "Identifier",
@@ -725,6 +731,10 @@ function tryMatchOuterIdentifier(input, position) {
   const remaining = input.slice(position);
 
   // Match @ followed by an identifier
+  if (remaining.startsWith("@_")) {
+    return null; // Let tryMatchSystemFunctionRef or tryMatchSymbol handle it
+  }
+
   if (remaining.startsWith("@") && remaining.length > 1 && identifierStart.test(remaining[1])) {
     let length = 2; // @ + first char
     while (length < remaining.length && identifierPart.test(remaining[length])) {
@@ -732,17 +742,20 @@ function tryMatchOuterIdentifier(input, position) {
     }
     const original = remaining.slice(0, length);
     const name = remaining.slice(1, length); // Strip @ prefix
-    const firstChar = name[0];
-    const isCapital = firstChar.toUpperCase() === firstChar;
+
+    let firstLetter = null;
+    for (let i = 0; i < name.length; i++) {
+      if (/[\p{L}]/u.test(name[i])) {
+        firstLetter = name[i];
+        break;
+      }
+    }
+
+    const isCapital = firstLetter !== null && firstLetter.toUpperCase() === firstLetter;
     const kind = isCapital ? "System" : "User";
 
     // Normalize case: convert rest to match first character's case
-    let value;
-    if (isCapital) {
-      value = firstChar + name.slice(1).toUpperCase();
-    } else {
-      value = firstChar + name.slice(1).toLowerCase();
-    }
+    const value = isCapital ? name.toUpperCase() : name.toLowerCase();
 
     return {
       type: "OuterIdentifier",
