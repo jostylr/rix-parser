@@ -84,7 +84,15 @@ const SYMBOL_TABLE = {
   "|^:": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
   "|?": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
 
-  // Assignment with = (same as :=)
+  // Assignment operators
+  "+=": { precedence: PRECEDENCE.ASSIGNMENT, associativity: "right", type: "infix" },
+  "-=": { precedence: PRECEDENCE.ASSIGNMENT, associativity: "right", type: "infix" },
+  "*=": { precedence: PRECEDENCE.ASSIGNMENT, associativity: "right", type: "infix" },
+  "/=": { precedence: PRECEDENCE.ASSIGNMENT, associativity: "right", type: "infix" },
+  "//=": { precedence: PRECEDENCE.ASSIGNMENT, associativity: "right", type: "infix" },
+  "%=": { precedence: PRECEDENCE.ASSIGNMENT, associativity: "right", type: "infix" },
+  "^=": { precedence: PRECEDENCE.ASSIGNMENT, associativity: "right", type: "infix" },
+  "**=": { precedence: PRECEDENCE.ASSIGNMENT, associativity: "right", type: "infix" },
   "=": {
     precedence: PRECEDENCE.ASSIGNMENT,
     associativity: "right",
@@ -515,6 +523,13 @@ class Parser {
             original: token.original,
           });
         }
+
+      case "OuterIdentifier":
+        this.advance();
+        return this.createNode("OuterIdentifier", {
+          name: token.value,
+          original: token.original,
+        });
 
       case "PlaceHolder":
         this.advance();

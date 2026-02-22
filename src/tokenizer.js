@@ -17,6 +17,8 @@ const symbols = [
   ":=>",
   ":->",
   "||>",
+  "//=",
+  "**=",
   "|>&&",
   "|>||",
   "|>>",
@@ -52,6 +54,12 @@ const symbols = [
   "{|",
   "{:",
   "{@",
+  "+=",
+  "-=",
+  "*=",
+  "/=",
+  "%=",
+  "^=",
   "<=",
   ">=",
   "==",
@@ -162,6 +170,10 @@ function tokenize(input) {
     if (!token) {
       // Try to match strings (quotes, backticks)
       token = tryMatchString(input, position);
+    }
+    if (!token) {
+      // Try to match @OuterIdentifier
+      token = tryMatchOuterIdentifier(input, position);
     }
     if (!token) {
       // Try to match @_ system function refs (before identifiers and symbols)
@@ -715,6 +727,41 @@ function tryMatchSymbol(input, position) {
         pos: [position, position, position + 1],
       };
     }
+  }
+
+  return null;
+}
+
+function tryMatchOuterIdentifier(input, position) {
+  const remaining = input.slice(position);
+
+  // Match @ followed by an identifier
+  if (remaining.startsWith("@") && remaining.length > 1 && identifierStart.test(remaining[1])) {
+    let length = 2; // @ + first char
+    while (length < remaining.length && identifierPart.test(remaining[length])) {
+      length++;
+    }
+    const original = remaining.slice(0, length);
+    const name = remaining.slice(1, length); // Strip @ prefix
+    const firstChar = name[0];
+    const isCapital = firstChar.toUpperCase() === firstChar;
+    const kind = isCapital ? "System" : "User";
+
+    // Normalize case: convert rest to match first character's case
+    let value;
+    if (isCapital) {
+      value = firstChar + name.slice(1).toUpperCase();
+    } else {
+      value = firstChar + name.slice(1).toLowerCase();
+    }
+
+    return {
+      type: "OuterIdentifier",
+      original: original,
+      value: value, // The normalized name without the @
+      kind: kind,
+      pos: [position, position, position + length],
+    };
   }
 
   return null;
