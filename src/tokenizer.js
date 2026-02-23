@@ -28,6 +28,7 @@ const symbols = [
   "|><",
   "|<>",
   "|;",
+  "|}",
   "|>",
   "/%",
   "//",
@@ -115,9 +116,7 @@ const symbols = [
   "@",
   "=",
   "'",
-  "|}",
   ":",
-  "|",
   "?",
 ];
 
@@ -174,12 +173,12 @@ function tokenize(input) {
       token = tryMatchString(input, position);
     }
     if (!token) {
-      // Try to match @OuterIdentifier
-      token = tryMatchOuterIdentifier(input, position);
-    }
-    if (!token) {
       // Try to match @_ system function refs (before identifiers and symbols)
       token = tryMatchSystemFunctionRef(input, position);
+    }
+    if (!token) {
+      // Try to match @OuterIdentifier
+      token = tryMatchOuterIdentifier(input, position);
     }
     if (!token) {
       // Try to match identifiers
@@ -413,6 +412,19 @@ function tryMatchNumber(input, position) {
   // Prefix Patterns (0x..., 0b..., 0k..., etc.)
   // Must check these before standard decimal patterns to avoid catching '0' as Integer(0) and 'x' as Identifier
 
+  // Prefix Interval: 0x1:0xA or 0x1:10
+  match = remaining.match(
+    /^-?(?:(?:0z\[\d+\]|0[a-zA-Z])[0-9a-zA-Z]*(?:\.[0-9a-zA-Z]*)?|(?:\d+\.\.\d+\/\d+|\d+\.\d+#\d+|\.\d+#\d+|\d+#\d+|\d+\/\d+|\d+\.\d+|\.\d+|\d+)):-?(?:(?:0z\[\d+\]|0[a-zA-Z])[0-9a-zA-Z]*(?:\.[0-9a-zA-Z]*)?|(?:\d+\.\.\d+\/\d+|\d+\.\d+#\d+|\.\d+#\d+|\d+#\d+|\d+\/\d+|\d+\.\d+|\.\d+|\d+))/,
+  );
+  if (match) {
+    return {
+      type: "Number",
+      original: match[0],
+      value: match[0],
+      pos: [position, position, position + match[0].length],
+    };
+  }
+
   // Prefix Mixed Number: 0xA..B/C or 0xA..0xB/0xC
   match = remaining.match(/^-?(?:0z\[\d+\]|0[a-zA-Z])[0-9a-zA-Z]*\.\.(?:0z\[\d+\]|0[a-zA-Z])?[0-9a-zA-Z]*\/(?:0z\[\d+\]|0[a-zA-Z])?[0-9a-zA-Z]*/);
   if (match) {
@@ -448,6 +460,19 @@ function tryMatchNumber(input, position) {
 
   // Prefix Integer: 0xA, 0b101, 0z[10]10
   match = remaining.match(/^-?(?:0z\[\d+\]|0[a-zA-Z])[0-9a-zA-Z]*/);
+  if (match) {
+    return {
+      type: "Number",
+      original: match[0],
+      value: match[0],
+      pos: [position, position, position + match[0].length],
+    };
+  }
+
+  // Complex intervals with all number types (including leading decimal)
+  match = remaining.match(
+    /^-?(?:\d+\.\.\d+\/\d+|\d+\.\d+#\d+|\.\d+#\d+|\d+#\d+|\d+\/\d+|\d+\.\d+|\.\d+|\d+):-?(?:\d+\.\.\d+\/\d+|\d+\.\d+#\d+|\.\d+#\d+|\d+#\d+|\d+\/\d+|\d+\.\d+|\.\d+|\d+)/,
+  );
   if (match) {
     return {
       type: "Number",
@@ -515,6 +540,19 @@ function tryMatchNumber(input, position) {
     };
   }
 
+  // Simple intervals (including leading decimal)
+  match = remaining.match(
+    /^-?(?:\d+(?:\.\d+)?|\.\d+):-?(?:\d+(?:\.\d+)?|\.\d+)/,
+  );
+  if (match) {
+    return {
+      type: "Number",
+      original: match[0],
+      value: match[0],
+      pos: [position, position, position + match[0].length],
+    };
+  }
+
   // Rationals (no spaces allowed)
   match = remaining.match(/^-?\d+\/\d+/);
   if (match) {
@@ -563,7 +601,7 @@ function tryMatchSystemFunctionRef(input, position) {
     const original = remaining.slice(0, length);
     const name = remaining.slice(2, length); // Strip @_ prefix for value
     // System function refs are always uppercase-normalized
-    const value = name.toUpperCase();
+    const value = name[0].toUpperCase() + name.slice(1).toUpperCase();
     return {
       type: "Identifier",
       original: original,
@@ -694,9 +732,8 @@ function tryMatchOuterIdentifier(input, position) {
   const remaining = input.slice(position);
 
   // Match @ followed by an identifier
-  if (remaining.startsWith("@_")) {
-    return null; // Let tryMatchSystemFunctionRef or tryMatchSymbol handle it
-  }
+  // But reject @_ prefix, which is for SystemFunction identifiers
+  if (remaining.startsWith("@_")) return null;
 
   if (remaining.startsWith("@") && remaining.length > 1 && identifierStart.test(remaining[1])) {
     let length = 2; // @ + first char
