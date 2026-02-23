@@ -2078,4 +2078,91 @@ describe("Math Oracle Tokenizer", () => {
       });
     });
   });
+
+  describe("Regex Literals", () => {
+    test("basic regex literal", () => {
+      const tokens = tokenize("{/pattern/}");
+      expect(tokens).toEqual(
+        withEnd([
+          {
+            type: "RegexLiteral",
+            original: "{/pattern/}",
+            pattern: "pattern",
+            flags: "",
+            mode: "ONE",
+            pos: [0, 0, 11],
+          },
+        ])
+      );
+    });
+
+    test("regex with spaces and flags", () => {
+      const tokens = tokenize("{ /a.*b/ig }");
+      expect(tokens).toEqual(
+        withEnd([
+          {
+            type: "RegexLiteral",
+            original: "{ /a.*b/ig }",
+            pattern: "a.*b",
+            flags: "ig",
+            mode: "ONE",
+            pos: [0, 0, 12],
+          },
+        ])
+      );
+    });
+
+    test("regex with modes", () => {
+      const tokens = tokenize("{/test/i?} {/test/*} {/test/:}");
+      expect(tokens).toEqual(
+        withEnd([
+          {
+            type: "RegexLiteral",
+            original: "{/test/i?}",
+            pattern: "test",
+            flags: "i",
+            mode: "TEST",
+            pos: [0, 0, 10],
+          },
+          {
+            type: "RegexLiteral",
+            original: " {/test/*}",
+            pattern: "test",
+            flags: "",
+            mode: "ALL",
+            pos: [10, 11, 20],
+          },
+          {
+            type: "RegexLiteral",
+            original: " {/test/:}",
+            pattern: "test",
+            flags: "",
+            mode: "ITER",
+            pos: [20, 21, 30],
+          },
+        ])
+      );
+    });
+
+    test("regex with escaped slash", () => {
+      const tokens = tokenize("{/a\\/b/}");
+      expect(tokens).toEqual(
+        withEnd([
+          {
+            type: "RegexLiteral",
+            original: "{/a\\/b/}",
+            pattern: "a\\/b",
+            flags: "",
+            mode: "ONE",
+            pos: [0, 0, 8],
+          },
+        ])
+      );
+    });
+
+    test("unclosed regex throws error", () => {
+      expect(() => tokenize("{/pattern")).toThrow("Unterminated regex literal");
+      expect(() => tokenize("{/pattern/")).toThrow("Unterminated regex literal");
+    });
+  });
 });

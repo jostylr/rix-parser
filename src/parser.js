@@ -504,6 +504,15 @@ class Parser {
           });
         }
 
+      case "RegexLiteral":
+        this.advance();
+        return this.createNode("RegexLiteral", {
+          pattern: token.pattern,
+          flags: token.flags,
+          mode: token.mode,
+          original: token.original,
+        });
+
       case "Identifier":
         this.advance();
         if (token.kind === "SystemFunction") {

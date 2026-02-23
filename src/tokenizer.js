@@ -185,6 +185,10 @@ function tokenize(input) {
       token = tryMatchIdentifier(input, position);
     }
     if (!token) {
+      // Try to match regex literals first (so '{/' is not seen as '{' followed by '/')
+      token = tryMatchRegexLiteral(input, position);
+    }
+    if (!token) {
       // Try to match semicolon sequences first (before general symbols)
       token = tryMatchSemicolonSequence(input, position);
     }
@@ -767,6 +771,93 @@ function tryMatchOuterIdentifier(input, position) {
   }
 
   return null;
+}
+
+function tryMatchRegexLiteral(input, position) {
+  const remaining = input.slice(position);
+  // Match '{' followed by optional whitespace followed by '/'
+  const startMatch = remaining.match(/^\{\s*\//);
+  if (!startMatch) return null;
+
+  // We are now inside a regex literal.
+  const contentStart = startMatch[0].length;
+  let searchPos = contentStart;
+  let inEscape = false;
+  let patternEnd = -1;
+
+  while (searchPos < remaining.length) {
+    const char = remaining[searchPos];
+    if (inEscape) {
+      inEscape = false;
+    } else if (char === '\\') {
+      inEscape = true;
+    } else if (char === '/') {
+      patternEnd = searchPos;
+      break;
+    }
+    searchPos++;
+  }
+
+  if (patternEnd === -1) {
+    const { line, col } = posToLineCol(input, position);
+    throw new Error(`Unterminated regex literal at line ${line}:${col}. Expected closing '/'.`);
+  }
+
+  const pattern = remaining.slice(contentStart, patternEnd);
+
+  // Now parse flags and optional mode until '}'
+  searchPos = patternEnd + 1;
+  let flagsStart = searchPos;
+
+  while (searchPos < remaining.length) {
+    const char = remaining[searchPos];
+    if (char === '}') {
+      break;
+    }
+    searchPos++;
+  }
+
+  if (searchPos >= remaining.length || remaining[searchPos] !== '}') {
+    const { line, col } = posToLineCol(input, position);
+    throw new Error(`Unterminated regex literal at line ${line}:${col}. Expected closing '}'.`);
+  }
+
+  const flagsAndModeStr = remaining.slice(flagsStart, searchPos).trim();
+  let flags = "";
+  let mode = "ONE"; // Default
+
+  if (flagsAndModeStr.length > 0) {
+    const lastChar = flagsAndModeStr[flagsAndModeStr.length - 1];
+    let flagsStr = flagsAndModeStr;
+    if (lastChar === '?') {
+      mode = "TEST";
+      flagsStr = flagsAndModeStr.slice(0, -1);
+    } else if (lastChar === '*') {
+      mode = "ALL";
+      flagsStr = flagsAndModeStr.slice(0, -1);
+    } else if (lastChar === ':') {
+      mode = "ITER";
+      flagsStr = flagsAndModeStr.slice(0, -1);
+    }
+
+    flags = flagsStr.trim();
+    if (flags.length > 0 && !/^[a-zA-Z]*$/.test(flags)) {
+      const { line, col } = posToLineCol(input, position);
+      throw new Error(`Invalid modifier or flag in regex literal at line ${line}:${col}.`);
+    }
+  }
+
+  const endPosition = searchPos + 1; // Include '}'
+  const original = remaining.slice(0, endPosition);
+
+  return {
+    type: "RegexLiteral",
+    original: original,
+    pattern: pattern,
+    flags: flags,
+    mode: mode,
+    pos: [position, position, position + original.length],
+  };
 }
 
 export { tokenize, posToLineCol };
