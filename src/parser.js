@@ -75,6 +75,8 @@ const SYMBOL_TABLE = {
   "|>&&": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
   "|>||": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
   "|><": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
+  "|>//": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
+  "|>/": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
   "|<>": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
   "|+": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
   "|*": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
@@ -949,6 +951,24 @@ class Parser {
       // Simple pipe operator
       right = this.parseExpression(rightPrec);
       return this.createNode("Pipe", {
+        left: left,
+        right: right,
+        pos: left.pos,
+        original: left.original + operator.original,
+      });
+    } else if (operator.value === "|>/") {
+      // STRICT slice operator
+      right = this.parseExpression(rightPrec);
+      return this.createNode("SliceStrict", {
+        left: left,
+        right: right,
+        pos: left.pos,
+        original: left.original + operator.original,
+      });
+    } else if (operator.value === "|>//") {
+      // CLAMPED slice operator
+      right = this.parseExpression(rightPrec);
+      return this.createNode("SliceClamp", {
         left: left,
         right: right,
         pos: left.pos,
