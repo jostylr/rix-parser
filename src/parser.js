@@ -75,6 +75,8 @@ const SYMBOL_TABLE = {
   "|>&&": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
   "|>||": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
   "|><": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
+  "|>/|": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
+  "|>#|": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
   "|>//": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
   "|>/": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
   "|<>": { precedence: PRECEDENCE.PIPE, associativity: "left", type: "infix" },
@@ -960,6 +962,24 @@ class Parser {
       // STRICT slice operator
       right = this.parseExpression(rightPrec);
       return this.createNode("SliceStrict", {
+        left: left,
+        right: right,
+        pos: left.pos,
+        original: left.original + operator.original,
+      });
+    } else if (operator.value === "|>/|") {
+      // SPLIT operator
+      right = this.parseExpression(rightPrec);
+      return this.createNode("Split", {
+        left: left,
+        right: right,
+        pos: left.pos,
+        original: left.original + operator.original,
+      });
+    } else if (operator.value === "|>#|") {
+      // CHUNK operator
+      right = this.parseExpression(rightPrec);
+      return this.createNode("Chunk", {
         left: left,
         right: right,
         pos: left.pos,
