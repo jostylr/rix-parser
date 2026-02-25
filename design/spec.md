@@ -998,11 +998,11 @@ A dual system for sequence/array/set literal evaluation:
   * Example: `{3}` is a set containing 3.
   * Example: `{a := 4, b := 5}` is a map.
 
-* **`{{ ... }}`**
+* **`{; ... }`**
 
   * Used for code blocks that can be assigned, passed as values, or returned from functions.
   * No space is allowed between the two opening braces.
-  * Example: `{{ 3 }}` is a code block whose value is 3.
+  * Example: `{; 3 }` is a code block whose value is 3.
 
 * **`{ { ... } }`**
 
@@ -1017,16 +1017,16 @@ A dual system for sequence/array/set literal evaluation:
 | Syntax       | Meaning                    | Notes                               |
 | ------------ | -------------------------- | ----------------------------------- |
 | `{3}`        | Set containing 3           |                                     |
-| `{{3}}`      | Code block, result is 3    | No space between braces             |
+| `{;3}`      | Code block, result is 3    | No space between braces             |
 | `{ {3} }`    | Set containing `{3}`       | Space after first brace required    |
-| `{{3; 4}}`   | Code block, result is 4    | Multiple statements, result is last |
+| `{;3; 4}`   | Code block, result is 4    | Multiple statements, result is last |
 | `{ {3}, 4 }` | Set containing `{3}` and 4 |                                     |
 
 ---
 
 ## Parsing and Style Guidance
 
-* **Double braces (`{{ ... }}`) without a space always indicate a code block.**
+* **Double braces (`{; ... }`) without a space always indicate a code block.**
 * **Single braces are never a code block.**
 * **A space between `{` and `{` (e.g., `{ { ... } }`) always means a set containing a set (or similar construct).**
 * Code blocks should return the value of their last statement.
@@ -1038,10 +1038,10 @@ A dual system for sequence/array/set literal evaluation:
 ## Examples
 
 ```plaintext
-foo := {{ x := 2; y := 3; x + y; }}        // code block assigned to foo, returns 5
+foo := {; x := 2; y := 3; x + y; }        // code block assigned to foo, returns 5
 bar := {3, 4, 5}                           // set containing 3, 4, and 5
 nested := { {3} }                          // set containing the set {3}
-If(a ?= 2, {{ y := 7; x + y; }}, {{ x := 9; y := 1; x * y; }})  // code blocks as branches
+If(a ?= 2, {; y := 7; x + y; }, {; x := 9; y := 1; x * y; })  // code blocks as branches
 ```
 
 

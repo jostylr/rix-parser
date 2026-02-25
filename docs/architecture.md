@@ -73,7 +73,7 @@ Parser Class
 │   ├── parseMatrix()
 │   ├── parseFunctionDefinition()
 │   ├── parseGeneratorChain()
-│   └── parseCodeBlock()
+│   └── parseBlockContainer()
 └── AST Construction
     └── createNode()
 ```

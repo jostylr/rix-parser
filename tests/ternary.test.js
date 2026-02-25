@@ -181,64 +181,64 @@ describe('Ternary Operator (??:)', () => {
     });
 
     it('should parse ternary with code block in true branch', () => {
-        const result = parse('result := x > 0 ?? {{ a := SIN(5); a + b }} ?: 7');
+        const result = parse('result := x > 0 ?? {; a := SIN(5); a + b } ?: 7');
         const ast = result[0];
 
         expect(ast.type).toBe('BinaryOperation');
         expect(ast.operator).toBe(':=');
         expect(ast.right.type).toBe('TernaryOperation');
-        expect(ast.right.trueExpression.type).toBe('CodeBlock');
-        expect(ast.right.trueExpression.statements.length).toBe(2);
+        expect(ast.right.trueExpression.type).toBe('BlockContainer');
+        expect(ast.right.trueExpression.elements.length).toBe(2);
         expect(ast.right.falseExpression.type).toBe('Number');
     });
 
     it('should parse ternary with code blocks in both branches', () => {
-        const result = parse('value := flag ?? {{ x := 10; y := 20; x * y }} ?: {{ z := -5; z^2 }}');
+        const result = parse('value := flag ?? {; x := 10; y := 20; x * y } ?: {; z := -5; z^2 }');
         const ast = result[0];
 
         expect(ast.type).toBe('BinaryOperation');
         expect(ast.right.type).toBe('TernaryOperation');
-        expect(ast.right.trueExpression.type).toBe('CodeBlock');
-        expect(ast.right.trueExpression.statements.length).toBe(3);
-        expect(ast.right.falseExpression.type).toBe('CodeBlock');
-        expect(ast.right.falseExpression.statements.length).toBe(2);
+        expect(ast.right.trueExpression.type).toBe('BlockContainer');
+        expect(ast.right.trueExpression.elements.length).toBe(3);
+        expect(ast.right.falseExpression.type).toBe('BlockContainer');
+        expect(ast.right.falseExpression.elements.length).toBe(2);
     });
 
     it('should parse nested ternary inside code block', () => {
-        const result = parse('complex := x > 0 ?? {{ temp := SIN(x); temp > 0.5 ?? temp^2 ?: temp/2 }} ?: 0');
+        const result = parse('complex := x > 0 ?? {; temp := SIN(x); temp > 0.5 ?? temp^2 ?: temp/2 } ?: 0');
         const ast = result[0];
 
         expect(ast.type).toBe('BinaryOperation');
         expect(ast.right.type).toBe('TernaryOperation');
-        expect(ast.right.trueExpression.type).toBe('CodeBlock');
-        expect(ast.right.trueExpression.statements.length).toBe(2);
-        expect(ast.right.trueExpression.statements[1].type).toBe('TernaryOperation');
+        expect(ast.right.trueExpression.type).toBe('BlockContainer');
+        expect(ast.right.trueExpression.elements.length).toBe(2);
+        expect(ast.right.trueExpression.elements[1].type).toBe('TernaryOperation');
     });
 
     it('should parse code block with mathematical computations', () => {
-        const result = parse('physics := energy > threshold ?? {{ v := SQRT(2 * energy / mass); momentum := mass * v; momentum }} ?: 0');
+        const result = parse('physics := energy > threshold ?? {; v := SQRT(2 * energy / mass); momentum := mass * v; momentum } ?: 0');
         const ast = result[0];
 
         expect(ast.type).toBe('BinaryOperation');
         expect(ast.right.type).toBe('TernaryOperation');
-        expect(ast.right.trueExpression.type).toBe('CodeBlock');
-        expect(ast.right.trueExpression.statements.length).toBe(3);
+        expect(ast.right.trueExpression.type).toBe('BlockContainer');
+        expect(ast.right.trueExpression.elements.length).toBe(3);
 
         // Check the mathematical expressions in the code block
-        const statements = ast.right.trueExpression.statements;
-        expect(statements[0].type).toBe('BinaryOperation'); // v := ...
-        expect(statements[1].type).toBe('BinaryOperation'); // momentum := ...
-        expect(statements[2].type).toBe('UserIdentifier'); // momentum
+        const elements = ast.right.trueExpression.elements;
+        expect(elements[0].type).toBe('BinaryOperation'); // v := ...
+        expect(elements[1].type).toBe('BinaryOperation'); // momentum := ...
+        expect(elements[2].type).toBe('UserIdentifier'); // momentum
     });
 
     it('should parse code block with array operations', () => {
-        const result = parse('arrayResult := flag ?? {{ a := [1,2,3]; b := [4,5,6]; a + b }} ?: [0,0,0]');
+        const result = parse('arrayResult := flag ?? {; a := [1,2,3]; b := [4,5,6]; a + b } ?: [0,0,0]');
         const ast = result[0];
 
         expect(ast.type).toBe('BinaryOperation');
         expect(ast.right.type).toBe('TernaryOperation');
-        expect(ast.right.trueExpression.type).toBe('CodeBlock');
-        expect(ast.right.trueExpression.statements.length).toBe(3);
+        expect(ast.right.trueExpression.type).toBe('BlockContainer');
+        expect(ast.right.trueExpression.elements.length).toBe(3);
         expect(ast.right.falseExpression.type).toBe('Array');
     });
 });

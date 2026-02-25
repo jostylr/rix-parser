@@ -468,7 +468,7 @@ This document provides a comprehensive reference for all token types generated b
 }
 ```
 
-### CodeBlock
+### BlockContainer
 ```javascript
 {
   statements: [ASTNode], // Block statements

@@ -118,9 +118,9 @@ describe("Phase 1 Tokenizer", () => {
       expect(tokens[0].value).toBe("{");
     });
 
-    test("{{ still works for code blocks", () => {
-      const tokens = tokenize("{{ a }}");
-      expect(tokens[0].value).toBe("{{");
+    test("{; still works for code blocks", () => {
+      const tokens = tokenize("{; a }");
+      expect(tokens[0].value).toBe("{;");
     });
   });
 

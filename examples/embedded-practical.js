@@ -80,7 +80,7 @@ console.log('3. Configuration and Data Formats');
 console.log('----------------------------------');
 
 const dataFormats = [
-    'config := `JSON: {"database": {"host": "localhost", "port": 5432}}`;',
+    'config := `JSON: {"database": {"host": "localhost", "port": 5432}`;',
     'xmlData := `XML: <user id="123"><name>John</name><email>john@example.com</email></user>`;',
     'csvData := `CSV: name,age,city`;',
     'yamlConfig := `YAML: server: localhost`;'

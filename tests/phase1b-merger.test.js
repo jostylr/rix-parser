@@ -163,10 +163,10 @@ describe("Phase 1B Parser", () => {
       expect(expr.type).toBe("DeferredBlock");
     });
 
-    test("@{{ a; b }} produces DeferredBlock with CodeBlock", () => {
-      const expr = stripMetadata(parseCode("@{{ a; b }};"))[0].expression;
+    test("@{; a; b } produces DeferredBlock with BlockContainer", () => {
+      const expr = stripMetadata(parseCode("@{; a; b };"))[0].expression;
       expect(expr.type).toBe("DeferredBlock");
-      expect(expr.body.type).toBe("CodeBlock");
+      expect(expr.body.type).toBe("BlockContainer");
     });
 
     test("deferred block in CASE-like context", () => {

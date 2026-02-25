@@ -67,62 +67,62 @@ function compareStructures(code1, desc1, code2, desc2) {
     }
 }
 
-console.log('RiX Code Block Examples {{ }}');
+console.log('RiX Code Block Examples {; }');
 console.log('=====================================');
 
 // Basic examples
-parseAndPrint('{{}};', 'Empty code block');
-parseAndPrint('{{42}};', 'Code block with single number');
-parseAndPrint('{{x}};', 'Code block with single identifier');
-parseAndPrint('{{x + y}};', 'Code block with single expression');
+parseAndPrint('{;};', 'Empty code block');
+parseAndPrint('{;42};', 'Code block with single number');
+parseAndPrint('{;x};', 'Code block with single identifier');
+parseAndPrint('{;x + y};', 'Code block with single expression');
 
 // Assignment examples
-parseAndPrint('{{x := 1}};', 'Code block with assignment');
-parseAndPrint('{{name := "Alice"}};', 'Code block with string assignment');
-parseAndPrint('{{result := SIN(PI/4)}};', 'Code block with function call assignment');
+parseAndPrint('{;x := 1};', 'Code block with assignment');
+parseAndPrint('{;name := "Alice"};', 'Code block with string assignment');
+parseAndPrint('{;result := SIN(PI/4)};', 'Code block with function call assignment');
 
 // Multiple statements
-parseAndPrint('{{x := 1; y := 2}};', 'Code block with two assignments');
-parseAndPrint('{{a := 5; b := 10; sum := a + b}};', 'Code block with calculation');
-parseAndPrint('{{x := 1; y := x * 2; z := x + y; result := z^2}};', 'Code block with dependent calculations');
+parseAndPrint('{;x := 1; y := 2};', 'Code block with two assignments');
+parseAndPrint('{;a := 5; b := 10; sum := a + b};', 'Code block with calculation');
+parseAndPrint('{;x := 1; y := x * 2; z := x + y; result := z^2};', 'Code block with dependent calculations');
 
 // Mixed statement types
-parseAndPrint('{{x := 1; x + 5; y := x * 2}};', 'Code block with mixed assignments and expressions');
-parseAndPrint('{{data := [1, 2, 3]; MAX(data); MIN(data)}};', 'Code block with array and function calls');
+parseAndPrint('{;x := 1; x + 5; y := x * 2};', 'Code block with mixed assignments and expressions');
+parseAndPrint('{;data := [1, 2, 3]; MAX(data); MIN(data)};', 'Code block with array and function calls');
 
 // Function definitions (if supported)
-parseAndPrint('{{square := x -> x^2; square(5)}};', 'Code block with function definition and call');
+parseAndPrint('{;square := x -> x^2; square(5)};', 'Code block with function definition and call');
 
 // Nested structures
-parseAndPrint('{{coords := {x := 10, y := 20}; distance := (coords.x^2 + coords.y^2)^0.5}};', 'Code block with map and calculation');
+parseAndPrint('{;coords := {x := 10, y := 20}; distance := (coords.x^2 + coords.y^2)^0.5};', 'Code block with map and calculation');
 
 console.log('\n\n=== DISTINCTION EXAMPLES ===');
 console.log('Demonstrating that spaces matter between braces');
 
-// Key distinction: {{ }} vs { {} }
-compareStructures('{{3}}', 'Code block with 3', '{ {3} }', 'Set containing set with 3');
-compareStructures('{{}}', 'Empty code block', '{ {} }', 'Set containing empty set');
-compareStructures('{{x := 1}}', 'Code block with assignment', '{ {x := 1} }', 'Set containing map with assignment');
+// Key distinction: {; } vs { {} }
+compareStructures('{;3}', 'Code block with 3', '{ {3} }', 'Set containing set with 3');
+compareStructures('{;}', 'Empty code block', '{ {} }', 'Set containing empty set');
+compareStructures('{;x := 1}', 'Code block with assignment', '{ {x := 1} }', 'Set containing map with assignment');
 
 // More complex distinctions  
-compareStructures('{{a; b; c}}', 'Code block with multiple statements', '{ {a, b, c} }', 'Set containing set with elements');
+compareStructures('{;a; b; c}', 'Code block with multiple statements', '{ {a, b, c} }', 'Set containing set with elements');
 
 console.log('\n\n=== ADVANCED EXAMPLES ===');
 
 // Code blocks with different types of content
-parseAndPrint('{{if_condition := x > 0; then_value := x^2; else_value := -x}};', 'Conditional logic simulation');
-parseAndPrint('{{input := 5; step1 := input * 2; step2 := step1 + 10; output := step2 / 3}};', 'Pipeline processing');
-parseAndPrint('{{matrix := [1, 2; 3, 4]; det := 1*4 - 2*3}};', 'Matrix operations (simplified)');
+parseAndPrint('{;if_condition := x > 0; then_value := x^2; else_value := -x};', 'Conditional logic simulation');
+parseAndPrint('{;input := 5; step1 := input * 2; step2 := step1 + 10; output := step2 / 3};', 'Pipeline processing');
+parseAndPrint('{;matrix := [1, 2; 3, 4]; det := 1*4 - 2*3};', 'Matrix operations (simplified)');
 
 // Nested code blocks
-parseAndPrint('{{outer := 1; inner := {{nested := outer + 1; nested * 2}}; result := inner + outer}};', 'Nested code blocks');
+parseAndPrint('{;outer := 1; inner := {;nested := outer + 1; nested * 2}; result := inner + outer};', 'Nested code blocks');
 
 console.log('\n=== Error Cases ===');
 console.log('Testing malformed code blocks:');
 
 // Test error handling
-parseAndPrint('{{x := 1', 'Missing closing braces (should error)');
-parseAndPrint('x := 1}}', 'Missing opening braces (should error)');
-parseAndPrint('{{}}}}', 'Extra closing braces (should error)');
+parseAndPrint('{;x := 1', 'Missing closing braces (should error)');
+parseAndPrint('x := 1}', 'Missing opening braces (should error)');
+parseAndPrint('{;}}', 'Extra closing braces (should error)');
 
 console.log('\nCode block examples completed!');

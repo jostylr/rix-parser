@@ -51,7 +51,7 @@ function stripMetadata(obj) {
     return obj.map(stripMetadata);
   }
   if (obj && typeof obj === "object") {
-    const { pos, original, ...rest } = obj;
+    const { pos, original, sigil, ...rest } = obj;
     const result = {};
     for (const [key, value] of Object.entries(rest)) {
       result[key] = stripMetadata(value);
@@ -1021,26 +1021,26 @@ describe("RiX Parser", () => {
 
   describe("Code blocks", () => {
     test("empty code block", () => {
-      const ast = parseCode("{{}};");
+      const ast = parseCode("{;};");
       expect(stripMetadata(ast)).toEqual([
         {
           type: "Statement",
           expression: {
-            type: "CodeBlock",
-            statements: [],
+            type: "BlockContainer",
+            elements: [],
           },
         },
       ]);
     });
 
     test("code block with single expression", () => {
-      const ast = parseCode("{{x := 1}};");
+      const ast = parseCode("{;x := 1};");
       expect(stripMetadata(ast)).toEqual([
         {
           type: "Statement",
           expression: {
-            type: "CodeBlock",
-            statements: [
+            type: "BlockContainer",
+            elements: [
               {
                 type: "BinaryOperation",
                 operator: ":=",
@@ -1053,14 +1053,14 @@ describe("RiX Parser", () => {
       ]);
     });
 
-    test("code block with multiple statements", () => {
-      const ast = parseCode("{{x := 1; y := 2}};");
+    test("code block with multiple elements", () => {
+      const ast = parseCode("{;x := 1; y := 2};");
       expect(stripMetadata(ast)).toEqual([
         {
           type: "Statement",
           expression: {
-            type: "CodeBlock",
-            statements: [
+            type: "BlockContainer",
+            elements: [
               {
                 type: "BinaryOperation",
                 operator: ":=",
@@ -1080,13 +1080,13 @@ describe("RiX Parser", () => {
     });
 
     test("code block with expressions", () => {
-      const ast = parseCode("{{a + b; c * d}};");
+      const ast = parseCode("{;a + b; c * d};");
       expect(stripMetadata(ast)).toEqual([
         {
           type: "Statement",
           expression: {
-            type: "CodeBlock",
-            statements: [
+            type: "BlockContainer",
+            elements: [
               {
                 type: "BinaryOperation",
                 operator: "+",
@@ -1106,15 +1106,15 @@ describe("RiX Parser", () => {
     });
 
     test("distinguishes code block from set containing set", () => {
-      const codeBlock = parseCode("{{3}};");
+      const codeBlock = parseCode("{;3};");
       const setOfSet = parseCode("{ {3} };");
 
       expect(stripMetadata(codeBlock)).toEqual([
         {
           type: "Statement",
           expression: {
-            type: "CodeBlock",
-            statements: [{ type: "Number", value: "3" }],
+            type: "BlockContainer",
+            elements: [{ type: "Number", value: "3" }],
           },
         },
       ]);
@@ -1136,9 +1136,9 @@ describe("RiX Parser", () => {
     });
 
     test("spaces matter between braces", () => {
-      // {{ }} is a code block
-      const codeBlock = parseCode("{{ }};");
-      expect(stripMetadata(codeBlock)[0].expression.type).toBe("CodeBlock");
+      // {; } is a code block
+      const codeBlock = parseCode("{; };");
+      expect(stripMetadata(codeBlock)[0].expression.type).toBe("BlockContainer");
 
       // { { } } is a set containing an empty set
       const setOfSet = parseCode("{ { } };");
@@ -1149,20 +1149,20 @@ describe("RiX Parser", () => {
     });
 
     test("nested code blocks", () => {
-      const ast = parseCode("{{ a := {{ 3 }} }};");
+      const ast = parseCode("{; a := {; 3 } };");
       expect(stripMetadata(ast)).toEqual([
         {
           type: "Statement",
           expression: {
-            type: "CodeBlock",
-            statements: [
+            type: "BlockContainer",
+            elements: [
               {
                 type: "BinaryOperation",
                 operator: ":=",
                 left: { type: "UserIdentifier", name: "a" },
                 right: {
-                  type: "CodeBlock",
-                  statements: [{ type: "Number", value: "3" }],
+                  type: "BlockContainer",
+                  elements: [{ type: "Number", value: "3" }],
                 },
               },
             ],
@@ -1172,27 +1172,27 @@ describe("RiX Parser", () => {
     });
 
     test("deeply nested code blocks", () => {
-      const ast = parseCode("{{ x := {{ y := {{ z := 42 }} }} }};");
+      const ast = parseCode("{; x := {; y := {; z := 42 } } };");
       expect(stripMetadata(ast)).toEqual([
         {
           type: "Statement",
           expression: {
-            type: "CodeBlock",
-            statements: [
+            type: "BlockContainer",
+            elements: [
               {
                 type: "BinaryOperation",
                 operator: ":=",
                 left: { type: "UserIdentifier", name: "x" },
                 right: {
-                  type: "CodeBlock",
-                  statements: [
+                  type: "BlockContainer",
+                  elements: [
                     {
                       type: "BinaryOperation",
                       operator: ":=",
                       left: { type: "UserIdentifier", name: "y" },
                       right: {
-                        type: "CodeBlock",
-                        statements: [
+                        type: "BlockContainer",
+                        elements: [
                           {
                             type: "BinaryOperation",
                             operator: ":=",
@@ -1211,16 +1211,16 @@ describe("RiX Parser", () => {
       ]);
     });
 
-    test("complex nested code blocks with multiple statements", () => {
+    test("complex nested code blocks with multiple elements", () => {
       const ast = parseCode(
-        "{{ outer := 1; inner := {{ nested := 2; nested + 1 }}; result := outer + inner }};",
+        "{; outer := 1; inner := {; nested := 2; nested + 1 }; result := outer + inner };",
       );
       expect(stripMetadata(ast)).toEqual([
         {
           type: "Statement",
           expression: {
-            type: "CodeBlock",
-            statements: [
+            type: "BlockContainer",
+            elements: [
               {
                 type: "BinaryOperation",
                 operator: ":=",
@@ -1232,8 +1232,8 @@ describe("RiX Parser", () => {
                 operator: ":=",
                 left: { type: "UserIdentifier", name: "inner" },
                 right: {
-                  type: "CodeBlock",
-                  statements: [
+                  type: "BlockContainer",
+                  elements: [
                     {
                       type: "BinaryOperation",
                       operator: ":=",
@@ -2355,8 +2355,8 @@ describe("RiX Parser", () => {
       });
     });
 
-    describe("Multiple statements", () => {
-      test("multiple statements with semicolons", () => {
+    describe("Multiple elements", () => {
+      test("multiple elements with semicolons", () => {
         const ast = parseCode("x := 5; y := 10;");
         expect(stripMetadata(ast)).toEqual([
           {

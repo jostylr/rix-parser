@@ -163,7 +163,7 @@ All sigil containers close with `}`.
 
 ### Relation to existing containers
 
-The plain `{` brace still works for the old inference-based containers (`Set`, `Map`, `System`). The `{{` `}}` code block syntax is also unchanged.
+The plain `{` brace still works for the old inference-based containers (`Set`, `Map`, `System`). The `{;` `}` code block syntax is also unchanged.
 
 ---
 
@@ -207,7 +207,7 @@ The `@` prefix before a brace container creates a **deferred block** — a compu
 @{; x + 1; x * 2 }       # Deferred BlockContainer
 @{? x > 0; x < 10 }      # Deferred CaseContainer
 @{ a, b }                 # Deferred plain brace container
-@{{ a; b }}               # Deferred CodeBlock
+@{; a; b }               # Deferred BlockContainer
 ```
 
 ### Use in control structures

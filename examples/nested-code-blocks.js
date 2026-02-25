@@ -29,18 +29,18 @@ function demonstrateNested(code, title, description) {
             let maxLevel = currentLevel;
             
             if (node && typeof node === 'object') {
-                if (node.type === 'CodeBlock' && currentLevel > 0) {
-                    console.log(`  ${'  '.repeat(currentLevel)}Level ${currentLevel}: CodeBlock with ${node.statements ? node.statements.length : 0} statement(s)`);
+                if (node.type === 'BlockContainer' && currentLevel > 0) {
+                    console.log(`  ${'  '.repeat(currentLevel)}Level ${currentLevel}: BlockContainer with ${node.statements ? node.statements.length : 0} statement(s)`);
                 }
                 
                 Object.values(node).forEach(value => {
                     if (Array.isArray(value)) {
                         value.forEach(item => {
-                            const level = countNestingLevels(item, node.type === 'CodeBlock' ? currentLevel + 1 : currentLevel);
+                            const level = countNestingLevels(item, node.type === 'BlockContainer' ? currentLevel + 1 : currentLevel);
                             maxLevel = Math.max(maxLevel, level);
                         });
                     } else if (value && typeof value === 'object') {
-                        const level = countNestingLevels(value, node.type === 'CodeBlock' ? currentLevel + 1 : currentLevel);
+                        const level = countNestingLevels(value, node.type === 'BlockContainer' ? currentLevel + 1 : currentLevel);
                         maxLevel = Math.max(maxLevel, level);
                     }
                 });
@@ -59,82 +59,82 @@ function demonstrateNested(code, title, description) {
 
 console.log('RiX Nested Code Block Examples');
 console.log('==============================');
-console.log('Demonstrating code blocks within code blocks {{ {{ }} }}\n');
+console.log('Demonstrating code blocks within code blocks {; {; } }\n');
 
 // Basic nested code blocks
 demonstrateNested(
-    '{{ a := {{ 3 }} }};',
+    '{; a := {; 3 } };',
     'Simple Nested Assignment',
     'Assign the result of a code block to a variable'
 );
 
 demonstrateNested(
-    '{{ result := {{ x := 5; x * 2 }} }};',
+    '{; result := {; x := 5; x * 2 } };',
     'Nested Computation',
     'Assign the result of a multi-statement computation'
 );
 
 // Multiple levels of nesting
 demonstrateNested(
-    '{{ x := {{ y := {{ z := 42 }} }} }};',
+    '{; x := {; y := {; z := 42 } } };',
     'Three-Level Nesting',
     'Deeply nested code blocks - each level assigns to the next'
 );
 
 demonstrateNested(
-    '{{ a := {{ b := {{ c := {{ d := 1 }} }} }} }};',
+    '{; a := {; b := {; c := {; d := 1 } } } };',
     'Four-Level Nesting',
     'Maximum practical nesting depth demonstration'
 );
 
 // Complex nested scenarios
 demonstrateNested(
-    '{{ outer := 1; inner := {{ nested := 2; nested + 1 }}; result := outer + inner }};',
+    '{; outer := 1; inner := {; nested := 2; nested + 1 }; result := outer + inner };',
     'Mixed Nested and Sequential',
     'Combine nested code blocks with sequential statements'
 );
 
 demonstrateNested(
-    '{{ config := {{ width := 800; height := 600; width * height }}; area := config; scale := 2 }};',
+    '{; config := {; width := 800; height := 600; width * height }; area := config; scale := 2 };',
     'Configuration Block',
     'Use nested code block as a configuration computation'
 );
 
 // Practical nested examples
 demonstrateNested(
-    '{{ physics := {{ mass := 10; velocity := 25; mass * velocity^2 / 2 }}; kinetic_energy := physics }};',
+    '{; physics := {; mass := 10; velocity := 25; mass * velocity^2 / 2 }; kinetic_energy := physics };',
     'Physics Calculation Module',
     'Encapsulate physics calculations in nested block'
 );
 
 demonstrateNested(
-    '{{ geometry := {{ radius := 5; area := PI * radius^2; circumference := 2 * PI * radius; area + circumference }}; total := geometry }};',
+    '{; geometry := {; radius := 5; area := PI * radius^2; circumference := 2 * PI * radius; area + circumference }; total := geometry };',
     'Geometry Calculation Module',
     'Complex geometric calculations in nested structure'
 );
 
 // Advanced nesting patterns
 demonstrateNested(
-    '{{ pipeline := {{ stage1 := {{ input := 10; input * 2 }}; stage2 := {{ temp := stage1; temp + 5 }}; stage2 }}; output := pipeline }};',
+    '{; pipeline := {; stage1 := {; input := 10; input * 2 }; stage2 := {; temp := stage1; temp + 5 }; stage2 }; output := pipeline };',
     'Multi-Stage Pipeline',
     'Three-stage processing pipeline with intermediate results'
 );
 
 demonstrateNested(
-    '{{ math_ops := {{ basic := {{ a := 3; b := 4; a + b }}; advanced := {{ x := basic; y := 2; x^y }}; advanced }}; final := math_ops }};',
+    '{; math_ops := {; basic := {; a := 3; b := 4; a + b }; advanced := {; x := basic; y := 2; x^y }; advanced }; final := math_ops };',
     'Mathematical Operation Hierarchy',
     'Hierarchical mathematical operations with dependencies'
 );
 
 // Nested with different expression types
 demonstrateNested(
-    '{{ data_processing := {{ raw := [1, 2, 3, 4, 5]; processed := {{ sum := 15; count := 5; sum / count }}; processed }}; average := data_processing }};',
+    '{; data_processing := {; raw := [1, 2, 3, 4, 5]; processed := {; sum := 15; count := 5; sum / count }; processed }; average := data_processing };',
     'Data Processing with Arrays',
     'Combine arrays with nested computational blocks'
 );
 
 demonstrateNested(
-    '{{ algorithm := {{ params := {{ threshold := 0.5; max_iter := 100; learning_rate := 0.01 }}; iteration := {{ current := 0; next := current + 1; converged := false }}; params }}; settings := algorithm }};',
+    '{; algorithm := {; params := {; threshold := 0.5; max_iter := 100; learning_rate := 0.01 }; iteration := {; current := 0; next := current + 1; converged := false }; params }; settings := algorithm };',
     'Algorithm Configuration',
     'Complex algorithm settings with nested parameter blocks'
 );
@@ -142,10 +142,10 @@ demonstrateNested(
 console.log('\n=== Nested vs Non-Nested Comparison ===');
 
 console.log('\nNested approach:');
-console.log('{{ result := {{ base := 10; multiplier := 3; base * multiplier }} }};');
+console.log('{; result := {; base := 10; multiplier := 3; base * multiplier } };');
 
 console.log('\nNon-nested equivalent:');
-console.log('{{ base := 10; multiplier := 3; temp := base * multiplier; result := temp }};');
+console.log('{; base := 10; multiplier := 3; temp := base * multiplier; result := temp };');
 
 console.log('\nBenefits of nesting:');
 console.log('• Encapsulation of intermediate calculations');
@@ -159,14 +159,14 @@ console.log('2. Limit nesting depth to maintain readability (max 3-4 levels)');
 console.log('3. Use meaningful variable names for nested block results');
 console.log('4. Consider non-nested alternatives for simple cases');
 console.log('5. Use nesting for modular, reusable computation patterns');
-console.log('6. Remember: {{ {{ }} }} creates true nested scope');
+console.log('6. Remember: {; {; } } creates true nested scope');
 
 console.log('\n=== Error Cases ===');
 console.log('Testing malformed nested structures:');
 
 // Test error handling
-demonstrateNested('{{ a := {{ b := 1 }};', 'Missing inner closing braces');
-demonstrateNested('{{ a := {{ b := 1 }} }}', 'Missing outer closing braces');
-demonstrateNested('{{ a := { b := 1 } }};', 'Mixed brace types (should work differently)');
+demonstrateNested('{; a := {; b := 1 };', 'Missing inner closing braces');
+demonstrateNested('{; a := {; b := 1 } }', 'Missing outer closing braces');
+demonstrateNested('{; a := { b := 1 } };', 'Mixed brace types (should work differently)');
 
 console.log('\nNested code block examples completed!');

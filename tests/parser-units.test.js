@@ -342,7 +342,7 @@ describe("RiX Parser - Unit Operators", () => {
     });
 
     test("nested braces in mathematical units should error", () => {
-      expect(() => parseCode("y~{sqrt{2}};")).toThrow(
+      expect(() => parseCode("y~{sqrt{2};")).toThrow(
         "Nested '{' not allowed inside mathematical unit",
       );
     });

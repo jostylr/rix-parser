@@ -49,34 +49,34 @@ temp < 0 ?? "frozen" ?: "normal"
 
 ### Code Block Integration
 
-The ternary operator fully supports RiX's `{{ }}` code block syntax, enabling complex multi-statement conditional logic:
+The ternary operator fully supports RiX's `{; }` code block syntax, enabling complex multi-statement conditional logic:
 
 ```javascript
 // Basic code block in true branch
-result := x > 0 ?? {{ a := SIN(5); a + b }} ?: 7
+result := x > 0 ?? {; a := SIN(5); a + b } ?: 7
 
 // Code blocks in both branches
-value := flag ?? {{ 
+value := flag ?? {; 
     x := 10; 
     y := 20; 
     x * y 
-}} ?: {{ 
+} ?: {; 
     z := -5; 
     z^2 
-}}
+}
 
 // Mathematical computation with intermediate variables
-physics := energy > threshold ?? {{ 
+physics := energy > threshold ?? {; 
     v := SQRT(2 * energy / mass); 
     momentum := mass * v; 
     momentum 
-}} ?: 0
+} ?: 0
 
 // Nested ternary inside code block
-complex := x > 0 ?? {{ 
+complex := x > 0 ?? {; 
     temp := SIN(x); 
     temp > 0.5 ?? temp^2 ?: temp/2 
-}} ?: 0
+} ?: 0
 ```
 
 ### Complex Expressions
@@ -118,18 +118,18 @@ det > 0 ?? [[1,0],[0,1]] ?: [[0,1],[1,0]]
 x > 0 ?? LOG(x) ?: LOG(-x)
 
 // Code blocks with array operations
-arrayResult := flag ?? {{ 
+arrayResult := flag ?? {; 
     a := [1,2,3]; 
     b := [4,5,6]; 
     a + b 
-}} ?: [0,0,0]
+} ?: [0,0,0]
 
 // Code blocks with pipe operations
-processed := valid ?? {{ 
+processed := valid ?? {; 
     raw := getData(); 
     clean := raw |> sanitize |> normalize; 
     clean 
-}} ?: empty_data
+} ?: empty_data
 ```
 
 ## AST Structure
@@ -180,7 +180,7 @@ result := x > 0 ?? x ?: -x
 
 The ternary operator seamlessly integrates with RiX's code block syntax:
 
-- **Multi-statement blocks**: Both true and false branches can contain `{{ }}` code blocks with multiple semicolon-separated statements
+- **Multi-statement blocks**: Both true and false branches can contain `{; }` code blocks with multiple semicolon-separated statements
 - **Complex computations**: Code blocks enable intermediate variable assignments and complex mathematical calculations
 - **Nested ternary**: Ternary operations can be nested within code blocks for sophisticated conditional logic
 - **Full RiX support**: Code blocks support all RiX language features including functions, arrays, pipes, and system calls

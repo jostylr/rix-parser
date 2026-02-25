@@ -59,7 +59,7 @@ The content between brackets is preserved exactly as written, including spaces:
 Nested brackets of the same type are not allowed and will cause a parse error:
 - `x~[m[2]]` - ERROR: Nested '[' not allowed
 - `x~[m{2}]` - OK: Different bracket types
-- `y~{sqrt{2}}` - ERROR: Nested '{' not allowed
+- `y~{sqrt{2}` - ERROR: Nested '{' not allowed
 - `y~{sqrt[2]}` - OK: Different bracket types
 
 ## Tokenization Changes
