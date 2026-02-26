@@ -372,6 +372,7 @@ const SYMBOL_TABLE = {
   "{|": { precedence: 0, type: "brace_sigil" },
   "{:": { precedence: 0, type: "brace_sigil" },
   "{@": { precedence: 0, type: "brace_sigil" },
+  "{$": { precedence: 0, type: "brace_sigil" },
 
   // Mutation brace
   "{!": { precedence: 0, type: "brace_sigil" },
@@ -557,7 +558,7 @@ class Parser {
           return this.parseArray();
         } else if (token.value === "{") {
           return this.parseBraceContainer();
-        } else if (token.value === "{=" || token.value === "{?" || token.value === "{;" || token.value === "{|" || token.value === "{:" || token.value === "{@") {
+        } else if (token.value === "{=" || token.value === "{?" || token.value === "{;" || token.value === "{|" || token.value === "{:" || token.value === "{@" || token.value === "{$") {
           return this.parseBraceSigil(token.value);
         } else if (token.value === "{+" || token.value === "{*" || token.value === "{&&" || token.value === "{||") {
           return this.parseOperatorBrace(token.value);
@@ -567,7 +568,7 @@ class Parser {
           // @ followed by { or brace sigil = deferred block: @{; ...}, @{? ...}, @{...}
           this.advance(); // consume '@'
           const nextVal = this.current.value;
-          if (nextVal === "{" || nextVal === "{;" || nextVal === "{?" || nextVal === "{=" || nextVal === "{|" || nextVal === "{:" || nextVal === "{@") {
+          if (nextVal === "{" || nextVal === "{;" || nextVal === "{?" || nextVal === "{=" || nextVal === "{|" || nextVal === "{:" || nextVal === "{@" || nextVal === "{$") {
             let inner;
             if (nextVal === "{") {
               inner = this.parseBraceContainer();
@@ -1817,94 +1818,33 @@ class Parser {
     this.advance(); // consume '{'
 
     const elements = [];
-    let containerType = null;
-    let hasAssignments = false;
-    let hasPatternMatches = false;
-    let hasEquations = false;
-    let hasSemicolons = false;
 
     if (this.current.value !== "}") {
       do {
+        // Handle leading semicolons (empty statements)
+        if (this.current.value === ";") {
+          this.advance();
+          continue;
+        }
+
         const element = this.parseExpression(0);
         elements.push(element);
 
-        // Check for type indicators
-        if (element.type === "PatternMatchingFunction") {
-          // Immediately throw error for pattern matching in braces
-          this.error(
-            "Pattern matching should use array syntax [ ] with sequential evaluation, not brace syntax { }. Use format: name :=> [ pattern1, pattern2, ... ]",
-          );
-        } else if (element.type === "BinaryOperation") {
-          if (element.operator === ":=") {
-            hasAssignments = true;
-          } else if (
-            element.operator === ":=:" ||
-            element.operator === ":>:" ||
-            element.operator === ":<:" ||
-            element.operator === ":<=:" ||
-            element.operator === ":>=:"
-          ) {
-            hasEquations = true;
-          }
-        }
-
-        if (this.current.value === ",") {
+        if (this.current.value === ";" || this.current.value === ",") {
           this.advance();
-        } else if (this.current.value === ";") {
-          hasSemicolons = true;
-          this.advance();
-        } else {
+        } else if (this.current.value !== "}") {
+          // If not closed, we expect a separator
           break;
         }
       } while (this.current.value !== "}" && this.current.type !== "End");
     }
 
     if (this.current.value !== "}") {
-      this.error("Expected closing brace");
+      this.error("Expected closing brace for block");
     }
     this.advance(); // consume '}'
 
-    // Determine container type based on contents
-    if (hasEquations) {
-      if (!hasSemicolons) {
-        this.error(
-          "System containers must contain only equations with equation operators separated by semicolons",
-        );
-      }
-      if (hasAssignments || hasPatternMatches) {
-        this.error("Cannot mix equations with other assignment types");
-      }
-      containerType = "System";
-    } else if (hasAssignments) {
-      containerType = "Map";
-    } else {
-      // All literals or expressions without special operators
-      containerType = "Set";
-    }
-
-    // Validate type homogeneity
-    if (containerType === "Map") {
-      for (const element of elements) {
-        if (element.type !== "BinaryOperation" || element.operator !== ":=") {
-          this.error(
-            "Map containers must contain only key-value pairs with :=",
-          );
-        }
-      }
-    } else if (containerType === "System") {
-      for (const element of elements) {
-        if (
-          element.type !== "BinaryOperation" ||
-          ![":=:", ":>:", ":<:", ":<=:", ":>=:"].includes(element.operator)
-        ) {
-          this.error(
-            "System containers must contain only equations with equation operators",
-          );
-        }
-      }
-    }
-
-    return this.createNode(containerType, {
+    return this.createNode("BlockContainer", {
       elements: elements,
       pos: startToken.pos,
       original: startToken.original,
@@ -1970,12 +1910,13 @@ class Parser {
       "{|": "SetContainer",
       "{:": "TupleContainer",
       "{@": "LoopContainer",
+      "{$": "SystemContainer",
     };
 
     const nodeType = sigilTypeMap[sigil];
 
     // Determine separator: temporal (;) vs spatial (,)
-    const temporalSigils = new Set(["{?", "{;", "{@"]);
+    const temporalSigils = new Set(["{?", "{;", "{@", "{$"]);
     const isTemporal = temporalSigils.has(sigil);
     const closerMap = {
       "{|": ["|}", "}"],

@@ -643,13 +643,13 @@ describe("RiX Parser", () => {
       ]);
     });
 
-    test("set with elements", () => {
+    test("block with elements (plain braces)", () => {
       const ast = parseCode("{a, b, c};");
       expect(stripMetadata(ast)).toEqual([
         {
           type: "Statement",
           expression: {
-            type: "Set",
+            type: "BlockContainer",
             elements: [
               { type: "UserIdentifier", name: "a" },
               { type: "UserIdentifier", name: "b" },
@@ -660,13 +660,13 @@ describe("RiX Parser", () => {
       ]);
     });
 
-    test("set with literal values", () => {
+    test("block with literal values", () => {
       const ast = parseCode("{3, 5, 6};");
       expect(stripMetadata(ast)).toEqual([
         {
           type: "Statement",
           expression: {
-            type: "Set",
+            type: "BlockContainer",
             elements: [
               { type: "Number", value: "3" },
               { type: "Number", value: "5" },
@@ -677,13 +677,13 @@ describe("RiX Parser", () => {
       ]);
     });
 
-    test("map with key-value pairs", () => {
+    test("block with key-value pairs (previously map)", () => {
       const ast = parseCode("{a := 4, b := 5};");
       expect(stripMetadata(ast)).toEqual([
         {
           type: "Statement",
           expression: {
-            type: "Map",
+            type: "BlockContainer",
             elements: [
               {
                 type: "BinaryOperation",
@@ -703,19 +703,53 @@ describe("RiX Parser", () => {
       ]);
     });
 
-    test("pattern match with braces throws error", () => {
-      expect(() => parseCode("{(x) :=> x + 1, (y) :=> y * 2};")).toThrow(
-        /Pattern matching should use array syntax.*not brace syntax/,
-      );
-    });
-
-    test("system with equations", () => {
-      const ast = parseCode("{x :=: 3*x + 2; y :=: x};");
+    test("pattern matching in plain block", () => {
+      const ast = parseCode("{(x) -> x + 1, (y) -> y * 2};");
       expect(stripMetadata(ast)).toEqual([
         {
           type: "Statement",
           expression: {
-            type: "System",
+            type: "BlockContainer",
+            elements: [
+              {
+                type: "FunctionLambda",
+                parameters: {
+                  positional: [{ name: "x", defaultValue: null }],
+                  keyword: [], conditionals: [], metadata: {}
+                },
+                body: {
+                  type: "BinaryOperation",
+                  operator: "+",
+                  left: { type: "UserIdentifier", name: "x" },
+                  right: { type: "Number", value: "1" }
+                }
+              },
+              {
+                type: "FunctionLambda",
+                parameters: {
+                  positional: [{ name: "y", defaultValue: null }],
+                  keyword: [], conditionals: [], metadata: {}
+                },
+                body: {
+                  type: "BinaryOperation",
+                  operator: "*",
+                  left: { type: "UserIdentifier", name: "y" },
+                  right: { type: "Number", value: "2" }
+                }
+              }
+            ]
+          }
+        }
+      ]);
+    });
+
+    test("system with equations using {$ } sigil", () => {
+      const ast = parseCode("{$ x :=: 3*x + 2; y :=: x };");
+      expect(stripMetadata(ast)).toEqual([
+        {
+          type: "Statement",
+          expression: {
+            type: "SystemContainer",
             elements: [
               {
                 type: "BinaryOperation",
@@ -745,13 +779,13 @@ describe("RiX Parser", () => {
       ]);
     });
 
-    test("empty set", () => {
+    test("empty block", () => {
       const ast = parseCode("{};");
       expect(stripMetadata(ast)).toEqual([
         {
           type: "Statement",
           expression: {
-            type: "Set",
+            type: "BlockContainer",
             elements: [],
           },
         },
@@ -1105,9 +1139,9 @@ describe("RiX Parser", () => {
       ]);
     });
 
-    test("distinguishes code block from set containing set", () => {
+    test("nested blocks using plain braces", () => {
       const codeBlock = parseCode("{;3};");
-      const setOfSet = parseCode("{ {3} };");
+      const nestedBlock = parseCode("{ {3} };");
 
       expect(stripMetadata(codeBlock)).toEqual([
         {
@@ -1119,14 +1153,14 @@ describe("RiX Parser", () => {
         },
       ]);
 
-      expect(stripMetadata(setOfSet)).toEqual([
+      expect(stripMetadata(nestedBlock)).toEqual([
         {
           type: "Statement",
           expression: {
-            type: "Set",
+            type: "BlockContainer",
             elements: [
               {
-                type: "Set",
+                type: "BlockContainer",
                 elements: [{ type: "Number", value: "3" }],
               },
             ],
@@ -1135,16 +1169,12 @@ describe("RiX Parser", () => {
       ]);
     });
 
-    test("spaces matter between braces", () => {
-      // {; } is a code block
-      const codeBlock = parseCode("{; };");
-      expect(stripMetadata(codeBlock)[0].expression.type).toBe("BlockContainer");
-
-      // { { } } is a set containing an empty set
-      const setOfSet = parseCode("{ { } };");
-      expect(stripMetadata(setOfSet)[0].expression.type).toBe("Set");
-      expect(stripMetadata(setOfSet)[0].expression.elements[0].type).toBe(
-        "Set",
+    test("nested blocks using plain braces", () => {
+      // { { } } is a block containing an empty block
+      const nestedBlock = parseCode("{ { } };");
+      expect(stripMetadata(nestedBlock)[0].expression.type).toBe("BlockContainer");
+      expect(stripMetadata(nestedBlock)[0].expression.elements[0].type).toBe(
+        "BlockContainer",
       );
     });
 
@@ -2748,30 +2778,6 @@ describe("RiX Parser", () => {
       test("mixed array elements with metadata throws error", () => {
         expect(() => parseCode('[1, 2, 3, name := "invalid"];')).toThrow(
           /Cannot mix array elements with metadata/,
-        );
-      });
-
-      test("mixed map and set elements throws error", () => {
-        expect(() => parseCode("{a := 1, b, c := 3};")).toThrow(
-          /Map containers must contain only key-value pairs/,
-        );
-      });
-
-      test("mixed pattern match and assignment throws error", () => {
-        expect(() => parseCode("{(x) :=> x + 1, a := 2};")).toThrow(
-          /Pattern matching should use array syntax.*not brace syntax/,
-        );
-      });
-
-      test("mixed equation and assignment throws error", () => {
-        expect(() => parseCode("{x :=: 3, a := 2};")).toThrow(
-          /System containers must contain only equations with equation operators separated by semicolons/,
-        );
-      });
-
-      test("system without semicolons throws error", () => {
-        expect(() => parseCode("{x :=: 3*x + 2, y :=: x};")).toThrow(
-          /System containers must contain only equations/,
         );
       });
 
