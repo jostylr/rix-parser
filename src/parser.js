@@ -26,6 +26,8 @@ const PRECEDENCE = {
   PROPERTY: 130, // .
 };
 
+const JUXTAPOSITION_PRECEDENCE = 95; // Between multiplication (90) and exponentiation (100)
+
 // Symbol table for operators and their parsing behavior
 const SYMBOL_TABLE = {
   // Assignment operators (right associative)
@@ -1444,8 +1446,48 @@ class Parser {
 
       // Special case for function calls - now works on any expression
       if (this.current.value === "(") {
+        // Number followed by '(' is implicit multiplication: 3(x+1)
+        if (left.type === "Number" || left.type === "UserIdentifier") {
+          if (JUXTAPOSITION_PRECEDENCE < minPrec) {
+            break;
+          }
+          left = this.parseCall(left);
+          continue;
+        }
+
         left = this.parseCall(left);
         continue;
+      }
+
+      // Juxtaposition (Implicit Multiplication): Number followed by Identifier or PlaceHolder or OuterIdentifier
+      // 3a, 3_1, 3@a, 3x^2
+      // EXCLUDE tokens that are known infix operators (e.g. 1 OR 2 should not be 1 * (OR 2))
+      if (
+        left.type === "Number" &&
+        (this.current.type === "Identifier" ||
+          this.current.type === "PlaceHolder" ||
+          this.current.type === "OuterIdentifier")
+      ) {
+        if (JUXTAPOSITION_PRECEDENCE < minPrec) {
+          break;
+        }
+
+        // If it's a known operator, it's NOT a juxtaposition
+        const nextSymbolInfo = this.getSymbolInfo(this.current);
+        if (nextSymbolInfo && nextSymbolInfo.type === "infix") {
+          // Fall through to normal operator handling
+        } else {
+          // Use parseExpression with JUXTAPOSITION_PRECEDENCE to ensure 
+          // we only consume the right side if it doesn't have higher precedence.
+          const right = this.parseExpression(JUXTAPOSITION_PRECEDENCE + 1);
+          left = this.createNode("ImplicitMultiplication", {
+            left: left,
+            right: right,
+            pos: [left.pos[0], left.pos[0], right.pos[2]],
+            original: left.original + (right.original || ""),
+          });
+          continue;
+        }
       }
 
       // Special case for postfix @ operator (AT metadata access)
@@ -2720,14 +2762,18 @@ class Parser {
   // Parse function calls - now works on any expression, not just identifiers
   parseCall(target) {
     // Lowercase letter-based user identifiers followed by ( are implicit multiplication: f(x) = f * (x)
+    // Numbers followed by ( are also implicit multiplication: 3(x) = 3 * (x)
     // Operator-symbol identifiers (+, *, <, etc.) remain function calls
-    if (target.type === "UserIdentifier" && /^[\p{L}]/u.test(target.name)) {
+    if (
+      (target.type === "UserIdentifier" && /^[\p{L}]/u.test(target.name)) ||
+      target.type === "Number"
+    ) {
       const grouping = this.parseGrouping();
       return this.createNode("ImplicitMultiplication", {
         left: target,
         right: grouping,
-        pos: target.pos,
-        original: target.original + "(...)",
+        pos: [target.pos[0], target.pos[0], grouping.pos[2]],
+        original: target.original + grouping.original,
       });
     }
 

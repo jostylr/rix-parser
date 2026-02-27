@@ -1514,17 +1514,11 @@ describe("RiX Parser", () => {
         expect(stripMetadata(result)).toEqual([{
           type: 'Statement',
           expression: {
-            type: 'Call',
-            target: {
-              type: 'Number',
-              value: '3'
-            },
-            arguments: {
-              positional: [{
-                type: 'Number',
-                value: '4'
-              }],
-              keyword: {}
+            type: 'ImplicitMultiplication',
+            left: { type: 'Number', value: '3' },
+            right: {
+              type: 'Grouping',
+              expression: { type: 'Number', value: '4' }
             }
           }
         }]);
