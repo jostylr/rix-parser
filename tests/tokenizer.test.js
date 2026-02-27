@@ -688,39 +688,53 @@ describe("Math Oracle Tokenizer", () => {
       });
     });
 
-    describe("scientific notation", () => {
-      test("positive scientific notation", () => {
-        const tokens = tokenize("1E5 3.14E-2 2E+10");
+    describe("radix shift notation (_^)", () => {
+      test("positive radix shift", () => {
+        const tokens = tokenize("1_^2 3.14_^-2");
         expect(tokens).toEqual(
           withEnd([
-            { type: "Number", original: "1E5", value: "1E5", pos: [0, 0, 3] },
+            { type: "Number", original: "1_^2", value: "1_^2", pos: [0, 0, 4] },
             {
               type: "Number",
-              original: " 3.14E-2",
-              value: "3.14E-2",
-              pos: [3, 4, 11],
-            },
-            {
-              type: "Number",
-              original: " 2E+10",
-              value: "2E+10",
-              pos: [11, 12, 17],
+              original: " 3.14_^-2",
+              value: "3.14_^-2",
+              pos: [4, 5, 13],
             },
           ]),
         );
       });
 
-      test("negative scientific notation", () => {
-        const tokens = tokenize("-1E5 -3.14E-2");
+      test("negative radix shift", () => {
+        const tokens = tokenize("-1_^5 -3.14_^-2");
         expect(tokens).toEqual(
           withEnd([
-            { type: "Number", original: "-1E5", value: "-1E5", pos: [0, 0, 4] },
+            { type: "Number", original: "-1_^5", value: "-1_^5", pos: [0, 0, 5] },
             {
               type: "Number",
-              original: " -3.14E-2",
-              value: "-3.14E-2",
-              pos: [4, 5, 13],
+              original: " -3.14_^-2",
+              value: "-3.14_^-2",
+              pos: [5, 6, 15],
             },
+          ]),
+        );
+      });
+    });
+
+    describe("continued fractions (.~)", () => {
+      test("simple continued fraction", () => {
+        const tokens = tokenize("3.~7~15~1~292");
+        expect(tokens).toEqual(
+          withEnd([
+            { type: "Number", original: "3.~7~15~1~292", value: "3.~7~15~1~292", pos: [0, 0, 13] },
+          ]),
+        );
+      });
+
+      test("continued fraction with one term", () => {
+        const tokens = tokenize("1.~2");
+        expect(tokens).toEqual(
+          withEnd([
+            { type: "Number", original: "1.~2", value: "1.~2", pos: [0, 0, 4] },
           ]),
         );
       });

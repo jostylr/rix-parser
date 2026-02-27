@@ -1301,7 +1301,7 @@ describe("RiX Parser", () => {
   describe('Postfix operators', () => {
     describe('AT operator (@)', () => {
       test('simple AT operation', () => {
-        const result = parseCode('PI@(1E-6);');
+        const result = parseCode('PI@(1_^-6);');
         expect(stripMetadata(result)).toEqual([{
           type: 'Statement',
           expression: {
@@ -1316,7 +1316,7 @@ describe("RiX Parser", () => {
             },
             arg: {
               type: 'Number',
-              value: '1E-6'
+              value: '1_^-6'
             }
           }
         }]);
@@ -1341,7 +1341,7 @@ describe("RiX Parser", () => {
       });
 
       test('AT operation on expression', () => {
-        const result = parseCode('(1/3)@(1E-10);');
+        const result = parseCode('(1/3)@(1_^-10);');
         expect(stripMetadata(result)).toEqual([{
           type: 'Statement',
           expression: {
@@ -1355,14 +1355,14 @@ describe("RiX Parser", () => {
             },
             arg: {
               type: 'Number',
-              value: '1E-10'
+              value: '1_^-10'
             }
           }
         }]);
       });
 
       test('chained AT operations', () => {
-        const result = parseCode('PI@(1E-3)@(5E-4);');
+        const result = parseCode('PI@(1_^-3)@(5_^-4);');
         expect(stripMetadata(result)).toEqual([{
           type: 'Statement',
           expression: {
@@ -1379,12 +1379,12 @@ describe("RiX Parser", () => {
               },
               arg: {
                 type: 'Number',
-                value: '1E-3'
+                value: '1_^-3'
               }
             },
             arg: {
               type: 'Number',
-              value: '5E-4'
+              value: '5_^-4'
             }
           }
         }]);
@@ -1588,7 +1588,7 @@ describe("RiX Parser", () => {
 
       describe('Mixed postfix operations', () => {
         test('AT followed by ASK', () => {
-          const result = parseCode('PI@(1E-3)?(3.141:3.142);');
+          const result = parseCode('PI@(1_^-3)?(3.141:3.142);');
           expect(stripMetadata(result)).toEqual([{
             type: 'Statement',
             expression: {
@@ -1605,7 +1605,7 @@ describe("RiX Parser", () => {
                 },
                 arg: {
                   type: 'Number',
-                  value: '1E-3'
+                  value: '1_^-3'
                 }
               },
               arg: {
@@ -1645,7 +1645,7 @@ describe("RiX Parser", () => {
         });
 
         test('all three postfix operators chained', () => {
-          const result = parseCode('f(x)@(1E-6)?(result);');
+          const result = parseCode('f(x)@(1_^-6)?(result);');
           expect(stripMetadata(result)).toEqual([{
             type: 'Statement',
             expression: {
@@ -1668,7 +1668,7 @@ describe("RiX Parser", () => {
                 },
                 arg: {
                   type: 'Number',
-                  value: '1E-6'
+                  value: '1_^-6'
                 }
               },
               arg: {

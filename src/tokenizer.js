@@ -478,7 +478,7 @@ function tryMatchNumber(input, position) {
 
   // Complex intervals with all number types (including leading decimal)
   match = remaining.match(
-    /^-?(?:\d+\.\.\d+\/\d+|\d+\.\d+#\d+|\.\d+#\d+|\d+#\d+|\d+\/\d+|\d+\.\d+|\.\d+|\d+):-?(?:\d+\.\.\d+\/\d+|\d+\.\d+#\d+|\.\d+#\d+|\d+#\d+|\d+\/\d+|\d+\.\d+|\.\d+|\d+)/,
+    /^-?(?:\d+\.\.\d+\/\d+|\d+\.\d*#\d+|\.\d*#\d+|\d+#\d+|\d+\/\d+|\d+\.\d+|\.\d+|\d+):-?(?:\d+\.\.\d+\/\d+|\d+\.\d*#\d+|\.\d*#\d+|\d+#\d+|\d+\/\d+|\d+\.\d+|\.\d+|\d+)/,
   );
   if (match) {
     return {
@@ -489,10 +489,21 @@ function tryMatchNumber(input, position) {
     };
   }
 
-  // Scientific notation with various bases (including leading decimal)
-  // Strict mode: Only allow 'E', not 'e'
+  // Continued fractions: integer.~term~term~... (e.g. 3.~7~15~1~292)
+  match = remaining.match(/^-?\d+\.~\d+(?:~\d+)*/);
+  if (match) {
+    return {
+      type: "Number",
+      original: match[0],
+      value: match[0],
+      pos: [position, position, position + match[0].length],
+    };
+  }
+
+  // Radix shift notation: number_^exponent (e.g. 1_^2 = 100)
+  // Note: E notation is NOT supported here
   match = remaining.match(
-    /^-?(?:\d+(?:\.\d+)?(?:#\d+)?|\.\d+(?:#\d+)?|\d+\.\.\d+\/\d+|\d+\/\d+|\d+\.\d+|\.\d+|\d+)(?:E|_\^)[+-]?\d+/,
+    /^-?(?:\d+\.\d*#\d+|\.\d*#\d+|\d+\.\.\d+\/\d+|\d+\/\d+|\d+\.\d+|\.\d+|\d+)_\^[+-]?\d+/,
   );
   if (match) {
     return {
@@ -514,8 +525,8 @@ function tryMatchNumber(input, position) {
     };
   }
 
-  // Repeating decimals (form: digits.digits#digits, including leading decimal)
-  match = remaining.match(/^-?(?:\d+\.\d+#\d+|\.\d+#\d+)/);
+  // Repeating decimals (form: digits.digits#digits, digits.#digits, .digits#digits, .#digits)
+  match = remaining.match(/^-?(?:\d+\.\d*#\d+|\.\d*#\d+)/);
   if (match) {
     return {
       type: "Number",
