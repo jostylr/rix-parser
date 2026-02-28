@@ -738,6 +738,48 @@ describe("Math Oracle Tokenizer", () => {
           ]),
         );
       });
+
+      test("explicit-start continued fraction with positive coefficient", () => {
+        const tokens = tokenize("~1.~2");
+        expect(tokens).toEqual(
+          withEnd([
+            { type: "Number", original: "~1.~2", value: "~1.~2", pos: [0, 0, 5] },
+          ]),
+        );
+      });
+
+      test("explicit-start continued fraction with negative coefficient", () => {
+        const tokens = tokenize("~-1.~2");
+        expect(tokens).toEqual(
+          withEnd([
+            { type: "Number", original: "~-1.~2", value: "~-1.~2", pos: [0, 0, 6] },
+          ]),
+        );
+      });
+
+      test("explicit-start CF with multiple terms", () => {
+        const tokens = tokenize("~-2.~1~2~2");
+        expect(tokens).toEqual(
+          withEnd([
+            { type: "Number", original: "~-2.~1~2~2", value: "~-2.~1~2~2", pos: [0, 0, 10] },
+          ]),
+        );
+      });
+
+      test("negation of explicit CF: -~1.~2 is unary minus + explicit CF", () => {
+        const tokens = tokenize("-~1.~2");
+        expect(tokens).toEqual(
+          withEnd([
+            { type: "Symbol", original: "-", value: "-", pos: [0, 0, 1] },
+            { type: "Number", original: "~1.~2", value: "~1.~2", pos: [1, 1, 6] },
+          ]),
+        );
+      });
+
+      test("ambiguous CF -INT.~ throws syntax error", () => {
+        expect(() => tokenize("-1.~2")).toThrow(/[Aa]mbiguous/);
+        expect(() => tokenize("-2.~1~2~2")).toThrow(/[Aa]mbiguous/);
+      });
     });
 
     describe("numbers without units", () => {

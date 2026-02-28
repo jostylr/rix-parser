@@ -172,6 +172,10 @@ function tokenize(input) {
       token = tryMatchNumber(input, position);
     }
     if (!token) {
+      // Try to match explicit-start continued fractions (~INT.~...) before ~ is eaten as a symbol
+      token = tryMatchExplicitCF(input, position);
+    }
+    if (!token) {
       // Try to match strings (quotes, backticks)
       token = tryMatchString(input, position);
     }
@@ -403,6 +407,21 @@ function tryMatchString(input, position) {
   return null;
 }
 
+function tryMatchExplicitCF(input, position) {
+  const remaining = input.slice(position);
+  // Explicit-start CF: ~SIGNED_INT.~term~term~... (e.g. ~1.~2, ~-1.~2)
+  const match = remaining.match(/^~-?\d+\.~\d+(?:~\d+)*/);
+  if (match) {
+    return {
+      type: "Number",
+      original: match[0],
+      value: match[0],
+      pos: [position, position, position + match[0].length],
+    };
+  }
+  return null;
+}
+
 function tryMatchNumber(input, position) {
   const remaining = input.slice(position);
   let match;
@@ -412,6 +431,17 @@ function tryMatchNumber(input, position) {
   // OR if it starts with a prefix pattern (0 followed by letter)
   if (!/^(-?\d|-?\.\d)/.test(remaining)) {
     return null;
+  }
+
+  // Error: -INT.~ is an ambiguous continued fraction literal.
+  // Use ~-INT.~ for a negative first coefficient, or -~INT.~ to negate the value.
+  if (/^-\d+\.~\d/.test(remaining)) {
+    const { line, col } = posToLineCol(input, position);
+    const cfStr = remaining.match(/^-\d+\.~[\d~]*/)[0];
+    const posStr = cfStr.slice(1); // strip leading -
+    throw new Error(
+      `Ambiguous continued fraction at ${line}:${col}: write ~${cfStr} for a negative first coefficient, or -~${posStr} to negate the continued fraction value.`
+    );
   }
 
   // Try all number patterns (longest first for maximal munch)
@@ -489,8 +519,8 @@ function tryMatchNumber(input, position) {
     };
   }
 
-  // Continued fractions: integer.~term~term~... (e.g. 3.~7~15~1~292)
-  match = remaining.match(/^-?\d+\.~\d+(?:~\d+)*/);
+  // Implicit-start continued fractions: INT.~term~term~... (no sign, no ~ prefix)
+  match = remaining.match(/^\d+\.~\d+(?:~\d+)*/);
   if (match) {
     return {
       type: "Number",
