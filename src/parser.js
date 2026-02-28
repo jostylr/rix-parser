@@ -17,6 +17,7 @@ const PRECEDENCE = {
   EQUALITY: 50, // =, ?=, !=
   COMPARISON: 60, // <, >, <=, >=, ?<, ?>, etc.
   INTERVAL: 70, // :
+  CONVERSION: 75, // _>, <_
   ADDITION: 80, // +, -
   MULTIPLICATION: 90, // *, /, //, %, /^, /~, /%
   EXPONENTIATION: 100, // ^, **
@@ -243,6 +244,18 @@ const SYMBOL_TABLE = {
     associativity: "left",
     type: "infix",
     prefix: true,
+  },
+
+  // Base conversion operators
+  "_>": {
+    precedence: PRECEDENCE.CONVERSION,
+    associativity: "left",
+    type: "infix",
+  },
+  "<_": {
+    precedence: PRECEDENCE.CONVERSION,
+    associativity: "left",
+    type: "infix",
   },
 
   // Multiplication/division

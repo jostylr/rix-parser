@@ -718,6 +718,15 @@ describe("Math Oracle Tokenizer", () => {
           ]),
         );
       });
+
+      test("radix shift with grouped separators", () => {
+        const tokens = tokenize("1.234_4_^10");
+        expect(tokens).toEqual(
+          withEnd([
+            { type: "Number", original: "1.234_4_^10", value: "1.234_4_^10", pos: [0, 0, 11] },
+          ]),
+        );
+      });
     });
 
     describe("continued fractions (.~)", () => {
@@ -2219,6 +2228,43 @@ describe("Math Oracle Tokenizer", () => {
     test("unclosed regex throws error", () => {
       expect(() => tokenize("{/pattern")).toThrow("Unterminated regex literal");
       expect(() => tokenize("{/pattern/")).toThrow("Unterminated regex literal");
+    });
+  });
+
+  describe("RiX base I/O tokens", () => {
+    test("_> and <_ tokenize as single symbols", () => {
+      const tokens = tokenize('5 _> 0b; "101" <_ 0b;');
+      const symbols = tokens.filter((t) => t.type === "Symbol").map((t) => t.value);
+      expect(symbols.includes("_>")).toBe(true);
+      expect(symbols.includes("<_")).toBe(true);
+    });
+
+    test("uppercase prefixed quoted literal tokenizes as Number", () => {
+      const tokens = tokenize('0A"4A.F"');
+      const numbers = tokens.filter((t) => t.type === "Number");
+      expect(numbers.length).toBe(1);
+      expect(numbers[0].value).toBe('0A"4A.F"');
+    });
+
+    test("uppercase prefixed unquoted literal tokenizes as Number", () => {
+      const tokens = tokenize("0A4A.F");
+      const numbers = tokens.filter((t) => t.type === "Number");
+      expect(numbers.length).toBe(1);
+      expect(numbers[0].value).toBe("0A4A.F");
+    });
+
+    test("prefixed continued fraction tokenizes as Number", () => {
+      const tokens = tokenize("0b101.~11~10");
+      const numbers = tokens.filter((t) => t.type === "Number");
+      expect(numbers.length).toBe(1);
+      expect(numbers[0].value).toBe("0b101.~11~10");
+    });
+
+    test("explicit prefixed continued fraction tokenizes as Number", () => {
+      const tokens = tokenize("~0b101.~11~10");
+      const numbers = tokens.filter((t) => t.type === "Number");
+      expect(numbers.length).toBe(1);
+      expect(numbers[0].value).toBe("~0b101.~11~10");
     });
   });
 });

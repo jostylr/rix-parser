@@ -16,6 +16,8 @@ const symbols = [
   ":<:",
   ":=>",
   ":->",
+  "_>",
+  "<_",
   "||>",
   "//=",
   "**=",
@@ -71,6 +73,8 @@ const symbols = [
   "&&",
   "||",
   ">:",
+  "<",
+  ">",
   "->",
   "=>",
   "**",
@@ -409,8 +413,19 @@ function tryMatchString(input, position) {
 
 function tryMatchExplicitCF(input, position) {
   const remaining = input.slice(position);
+  // Explicit-start CF with prefixed base integer part: ~0b101.~11~10, ~-0B4.~3
+  let match = remaining.match(/^~-?(?:0z\[\d+\]|0[a-zA-Z])[0-9a-zA-Z]+\.\~[0-9a-zA-Z]+(?:~[0-9a-zA-Z]+)*/);
+  if (match) {
+    return {
+      type: "Number",
+      original: match[0],
+      value: match[0],
+      pos: [position, position, position + match[0].length],
+    };
+  }
+
   // Explicit-start CF: ~SIGNED_INT.~term~term~... (e.g. ~1.~2, ~-1.~2)
-  const match = remaining.match(/^~-?\d+\.~\d+(?:~\d+)*/);
+  match = remaining.match(/^~-?\d+\.~\d+(?:~\d+)*/);
   if (match) {
     return {
       type: "Number",
@@ -448,6 +463,40 @@ function tryMatchNumber(input, position) {
 
   // Prefix Patterns (0x..., 0b..., 0k..., etc.)
   // Must check these before standard decimal patterns to avoid catching '0' as Integer(0) and 'x' as Identifier
+
+  // Prefix continued fraction: 0b101.~11~10
+  match = remaining.match(/^-?(?:0z\[\d+\]|0[a-zA-Z])[0-9a-zA-Z]+\.~[0-9a-zA-Z]+(?:~[0-9a-zA-Z]+)*/);
+  if (match) {
+    return {
+      type: "Number",
+      original: match[0],
+      value: match[0],
+      pos: [position, position, position + match[0].length],
+    };
+  }
+
+  // Uppercase-prefix quoted literal: 0A"..."
+  match = remaining.match(/^-?0[A-Z]"(?:[^"\\]|\\.)*"/);
+  if (match) {
+    return {
+      type: "Number",
+      original: match[0],
+      value: match[0],
+      pos: [position, position, position + match[0].length],
+    };
+  }
+
+  // Uppercase-prefix safe unquoted literal stream: 0A4A.F, 0A1..3/4, etc.
+  // This also matches bare prefix token 0A for assignment LHS.
+  match = remaining.match(/^-?0[A-Z][0-9A-Za-z@&./#~_^+-]*/);
+  if (match) {
+    return {
+      type: "Number",
+      original: match[0],
+      value: match[0],
+      pos: [position, position, position + match[0].length],
+    };
+  }
 
   // Prefix Interval: 0x1:0xA or 0x1:10
   match = remaining.match(
@@ -533,7 +582,7 @@ function tryMatchNumber(input, position) {
   // Radix shift notation: number_^exponent (e.g. 1_^2 = 100)
   // Note: E notation is NOT supported here
   match = remaining.match(
-    /^-?(?:\d+\.\d*#\d+|\.\d*#\d+|\d+\.\.\d+\/\d+|\d+\/\d+|\d+\.\d+|\.\d+|\d+)_\^[+-]?\d+/,
+    /^-?(?:\d(?:_?\d)*\.\d(?:_?\d)*#\d(?:_?\d)*|\.\d(?:_?\d)*#\d(?:_?\d)*|\d(?:_?\d)*\.\.\d(?:_?\d)*\/\d(?:_?\d)*|\d(?:_?\d)*\/\d(?:_?\d)*|\d(?:_?\d)*\.\d(?:_?\d)*|\.\d(?:_?\d)*|\d(?:_?\d)*)_\^[+-]?\d(?:_?\d)*/,
   );
   if (match) {
     return {
