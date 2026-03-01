@@ -95,38 +95,24 @@ describe("Phase 1B Tokenizer", () => {
 // ============================================================
 
 describe("Phase 1B Parser", () => {
-  describe(".. double-dot external property access", () => {
-    test("obj..b produces ExternalAccess", () => {
-      const expr = stripMetadata(parseCode("obj..b;"))[0].expression;
-      expect(expr.type).toBe("ExternalAccess");
-      expect(expr.object).toEqual({ type: "UserIdentifier", name: "obj" });
-      expect(expr.property).toBe("b");
+  describe(".. double-dot meta property access", () => {
+    test("obj..name is now a parse error (use obj.name instead)", () => {
+      expect(() => parseCode("obj..b;")).toThrow();
     });
 
-    test("obj.. without property returns all external props", () => {
+    test("obj.. without property returns all meta props (ExternalAccess/META_ALL)", () => {
       const expr = stripMetadata(parseCode("obj..;"))[0].expression;
       expect(expr.type).toBe("ExternalAccess");
       expect(expr.object).toEqual({ type: "UserIdentifier", name: "obj" });
       expect(expr.property).toBeNull();
     });
 
-    test("chained double-dot: obj..a..b (not valid but parses)", () => {
-      // obj..a produces ExternalAccess, then ..b should fail gracefully
-      // Actually, obj..a returns a value, then ..b would access external on that
-      // But "a" is an identifier result, not an object. This would be a runtime error.
-      // Parser should still produce the AST though.
-      const expr = stripMetadata(parseCode("obj..a;"))[0].expression;
-      expect(expr.type).toBe("ExternalAccess");
-      expect(expr.property).toBe("a");
+    test("obj..a is a parse error", () => {
+      expect(() => parseCode("obj..a;")).toThrow();
     });
 
-    test("obj..b = 9 (assignment to external property)", () => {
-      const expr = stripMetadata(parseCode("obj..b = 9;"))[0].expression;
-      expect(expr.type).toBe("BinaryOperation");
-      expect(expr.operator).toBe("=");
-      expect(expr.left.type).toBe("ExternalAccess");
-      expect(expr.left.property).toBe("b");
-      expect(expr.right).toEqual({ type: "Number", value: "9" });
+    test("obj..b = 9 is a parse error", () => {
+      expect(() => parseCode("obj..b = 9;")).toThrow();
     });
   });
 
@@ -295,11 +281,11 @@ describe("Phase 1B Parser", () => {
   });
 
   describe("Integration: combined Phase 1B features", () => {
-    test("external property in assignment", () => {
-      const expr = stripMetadata(parseCode("obj..meta = {= a, b };"))[0].expression;
+    test("meta property in assignment (obj.meta = {= a, b })", () => {
+      const expr = stripMetadata(parseCode("obj.meta = {= a, b };"))[0].expression;
       expect(expr.type).toBe("BinaryOperation");
       expect(expr.operator).toBe("=");
-      expect(expr.left.type).toBe("ExternalAccess");
+      expect(expr.left.type).toBe("DotAccess");
       expect(expr.right.type).toBe("MapContainer");
     });
 

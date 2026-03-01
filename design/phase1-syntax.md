@@ -167,35 +167,69 @@ The plain `{` brace still works for the old inference-based containers (`Set`, `
 
 ---
 
-## 5. External Property Access: `..`
+## 5. Meta Property vs Collection Access
 
-The double-dot operator accesses **external properties** (metadata/decorations) on objects, distinct from regular map keys accessed via `.`.
+RiX separates two distinct access concepts:
+
+- **Meta properties** (`obj.name`) — external annotations/metadata on any value, stored in `obj._ext` (separate from map contents). Accessed with single dot.
+- **Collection indices/keys** (`obj[expr]`) — actual content of sequences, strings, and maps. Accessed with brackets.
 
 ### Syntax
 
 ```
-obj..b              # Access external property "b"
-obj..               # Access all external properties (returns map)
-obj..b = 9          # Assign to external property "b"
+obj.name            # Meta property access (META_GET) — returns null if absent
+obj.name = val      # Set meta property (META_SET) — null value = delete
+obj .= map          # Bulk merge map into meta properties (META_MERGE)
+obj..               # All meta properties as read-only map (META_ALL)
+
+obj[i]              # Sequence index, 1-based (INDEX_GET)
+obj[-1]             # Last element (negative = from end)
+obj["key"]          # Map access by string expression
+obj[:name]          # Map access by string key literal (KeyLiteral syntax)
+obj[i] = val        # Set index (INDEX_SET) — requires mutable=true meta flag
 ```
+
+**Removed:** `obj..name` (previously EXTGET) is now a **parse error**. Use `obj.name` for meta access.
+
+### Indexing rules
+
+| Collection type | Index type | Behavior |
+|----------------|------------|----------|
+| sequence / tuple | Integer (1-based) | `arr[1]` = first; `arr[-1]` = last; null if out of range |
+| string | Integer (1-based) | Returns single character; null if out of range |
+| map | String or any value | Returns entry or null |
 
 ### Related operators
 
 | Operator | Returns | Description |
 |----------|---------|-------------|
-| `obj..b` | value | External property access |
-| `obj..` | map | All external properties |
-| `obj.\|` | set | Set of keys |
-| `obj\|.` | set | Set of values |
+| `obj.name` | value | Meta property (null if absent) |
+| `obj..` | map | All meta properties (read-only copy) |
+| `obj .= map` | obj | Bulk meta merge |
+| `obj[expr]` | value | Collection index/key |
+| `obj[:name]` | value | Map key literal shorthand |
+| `obj.\|` | set | Set of map keys |
+| `obj\|.` | set | Set of map values |
 
 ### AST nodes
 
 | Syntax | AST Node | Fields |
 |--------|----------|--------|
-| `obj..b` | `ExternalAccess` | `object`, `property: "b"` |
+| `obj.name` | `DotAccess` | `object`, `property: "name"` |
 | `obj..` | `ExternalAccess` | `object`, `property: null` |
+| `obj..name` | *(parse error)* | — |
+| `obj[expr]` | `PropertyAccess` | `object`, `property: expr` |
+| `obj[:name]` | `PropertyAccess` | `object`, `property: {type:"KeyLiteral", name:"name"}` |
 | `obj.\|` | `KeySet` | `object` |
 | `obj\|.` | `ValueSet` | `object` |
+
+### Method calls
+
+When a `DotAccess` is used as the target of a function call, it desugars automatically:
+
+```
+obj.Method(args)    # CALL_EXPR(META_GET(obj, "Method"), obj, args...)
+```
 
 ---
 
@@ -337,7 +371,8 @@ SIN(x)              # FunctionCall (parentheses → not command call)
 | `SetContainer` | `{\| ... }` | `sigil`, `elements` |
 | `TupleContainer` | `{: ... }` | `sigil`, `elements` |
 | `LoopContainer` | `{@ ... }` | `sigil`, `elements` |
-| `ExternalAccess` | `obj..b` | `object`, `property` |
+| `DotAccess` | `obj.name` | `object`, `property: string` |
+| `ExternalAccess` | `obj..` | `object`, `property: null` |
 | `KeySet` | `obj.\|` | `object` |
 | `ValueSet` | `obj\|.` | `object` |
 | `DeferredBlock` | `@{...}` | `body` |
@@ -366,8 +401,14 @@ In Phase 2 (lowering pass), all syntax will lower to system function calls. Here
 | `F(x)` | `CALL("F", x)` |
 | `f(x)` | `MUL(RETRIEVE("f"), x)` |
 | `@_ADD(a, b)` | `ADD(a, b)` (direct, no translation needed) |
-| `obj..b` | `EXTGET(obj, "b")` |
-| `obj..b = 9` | `EXTSET(obj, "b", 9)` |
+| `obj.name` | `META_GET(obj, "name")` |
+| `obj.name = val` | `META_SET(obj, "name", val)` |
+| `obj..` | `META_ALL(obj)` |
+| `obj .= map` | `META_MERGE(obj, map)` |
+| `obj[i]` | `INDEX_GET(obj, i)` |
+| `obj[:key]` | `INDEX_GET(obj, "key")` |
+| `obj[i] = val` | `INDEX_SET(obj, i, val)` |
+| `obj.Method(args)` | `CALL_EXPR(META_GET(obj,"Method"), obj, args...)` |
 | `@{; x+1}` | `DEFER({fn:"ADD", ...})` |
 | `HELP topic` | `HELP("topic")` |
 

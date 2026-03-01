@@ -156,14 +156,34 @@ This document provides a comprehensive reference for all token types generated b
 }
 ```
 
-### PropertyAccess
+### DotAccess
 ```javascript
 {
   object: ASTNode,    // Object being accessed
-  property: ASTNode,  // Property name or expression
+  property: string,   // Meta property name (plain string, not a node)
   original: string    // Combined original text
 }
 ```
+**Purpose:** Meta property access (`obj.name`). Lowers to `META_GET`. For assignment (`obj.name = val`) lowers to `META_SET`. For method calls (`obj.Method(args)`) desugars to `CALL_EXPR(META_GET(obj,"Method"), obj, args...)`.
+
+### KeyLiteral
+```javascript
+{
+  name: string,       // The key name (string)
+  original: string    // Original text (":name")
+}
+```
+**Purpose:** String key literal inside brackets — `obj[:name]`. Used as the `property` field of a `PropertyAccess` node to indicate a direct string key (not a runtime expression). Lowers to `INDEX_GET(obj, "name")`.
+
+### PropertyAccess
+```javascript
+{
+  object: ASTNode,             // Object being accessed
+  property: ASTNode|KeyLiteral, // Index expression or KeyLiteral for [:name] syntax
+  original: string             // Combined original text
+}
+```
+**Purpose:** Collection index/key access (`obj[expr]`). Lowers to `INDEX_GET`. For `obj[:name]`, `property` is a `KeyLiteral`. For assignment (`obj[i] = val`) lowers to `INDEX_SET` (requires `mutable=true` meta flag).
 
 ### FunctionDefinition
 ```javascript
@@ -553,6 +573,87 @@ This document provides a comprehensive reference for all token types generated b
   original: string    // Original backtick literal
 }
 ```
+
+### DotAccess
+```javascript
+{
+  object: ASTNode,    // Object being accessed
+  property: string,   // Meta property name (plain string, not a node)
+  original: string    // Combined original text
+}
+```
+**Purpose:** Meta property access (`obj.name`). Lowers to `META_GET`. For assignment (`obj.name = val`) lowers to `META_SET`. When used as a call target (`obj.Method(args)`) desugars to `CALL_EXPR(META_GET(obj,"Method"), obj, args...)`.
+
+### ExternalAccess
+```javascript
+{
+  object: ASTNode,    // Object being accessed
+  property: null,     // Always null (obj..name is a parse error)
+  original: string    // Combined original text
+}
+```
+**Purpose:** Returns all meta properties as a read-only map (`obj..`). Lowers to `META_ALL`. Note: `obj..name` is a **parse error**; use `obj.name` instead.
+
+### KeyLiteral
+```javascript
+{
+  name: string,       // The key name (string)
+  original: string    // Original text (":name")
+}
+```
+**Purpose:** String key literal inside brackets — `obj[:name]`. Used as the `property` field of a `PropertyAccess` node to pass a string key without a runtime expression. Lowers to `INDEX_GET(obj, "name")`.
+
+### KeySet
+```javascript
+{
+  object: ASTNode,    // Map being accessed
+  original: string    // Combined original text
+}
+```
+**Purpose:** Get the set of keys of a map (`obj.|`). Lowers to `KEYS`.
+
+### ValueSet
+```javascript
+{
+  object: ASTNode,    // Map being accessed
+  original: string    // Combined original text
+}
+```
+**Purpose:** Get the set of values of a map (`obj|.`). Lowers to `VALUES`.
+
+### DeferredBlock
+```javascript
+{
+  body: ASTNode,      // The inner container node (BlockContainer, CaseContainer, etc.)
+  original: string    // Combined original text
+}
+```
+**Purpose:** A computation stored for later execution — not evaluated immediately (`@{; x + 1}`). Lowers to `DEFER(body)`.
+
+### Mutation
+```javascript
+{
+  target: ASTNode,    // Object being mutated
+  mutate: boolean,    // true = in-place ({!), false = copy ({=)
+  operations: [{
+    action: "add" | "remove",  // Operation type
+    key: string,               // Key to add or remove
+    value: ASTNode | null      // Value for "add"; null for "remove"
+  }],
+  original: string    // Combined original text
+}
+```
+**Purpose:** Map mutation syntax. `obj{= ops}` (copy mutation) lowers to `MUTCOPY`. `obj{! ops}` (in-place mutation) lowers to `MUTINPLACE`.
+
+### CommandCall
+```javascript
+{
+  command: ASTNode,   // SystemIdentifier for the command
+  arguments: [ASTNode], // Bare arguments (no parentheses in source)
+  original: string    // Combined original text
+}
+```
+**Purpose:** REPL command-style calls — uppercase system identifier followed by bare args without parentheses (`HELP algebra`). Lowers to `COMMAND`.
 
 ## Section 3: Common Token Properties
 

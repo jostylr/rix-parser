@@ -346,6 +346,13 @@ const SYMBOL_TABLE = {
     type: "infix",
   },
 
+  // Bulk meta merge (right associative, assignment level)
+  ".=": {
+    precedence: PRECEDENCE.ASSIGNMENT,
+    associativity: "right",
+    type: "infix",
+  },
+
   // Postfix metadata operators (highest precedence)
   "@": {
     precedence: PRECEDENCE.POSTFIX,
@@ -698,7 +705,25 @@ class Parser {
 
     let right;
     if (operator.value === "[" && symbolInfo.type === "postfix") {
-      // Array/property access
+      // Check for key literal syntax: obj[:name]
+      if (this.current.value === ":" && this.peek().type === "Identifier") {
+        this.advance(); // consume ':'
+        const keyName = this.current.value;
+        const keyOriginal = this.current.original;
+        this.advance(); // consume identifier
+        if (this.current.value !== "]") {
+          this.error("Expected ] after key literal [:name]");
+        }
+        this.advance(); // consume ']'
+        return this.createNode("PropertyAccess", {
+          object: left,
+          property: { type: "KeyLiteral", name: keyName, original: ":" + keyOriginal },
+          pos: left.pos,
+          original: left.original + operator.original,
+        });
+      }
+
+      // General expression index: obj[expr]
       right = this.parseExpression(0);
       if (this.current.value !== "]") {
         this.error("Expected closing bracket");
@@ -1207,28 +1232,18 @@ class Parser {
         original: left.original + operator.original + propertyOriginal,
       });
     } else if (operator.value === "..") {
-      // Double-dot external property access: obj..b
-      // If followed by identifier, access that external property
-      // If followed by nothing (or non-identifier), return all external properties
+      // Double-dot: obj.. returns all meta properties as a map
+      // obj..name is no longer supported (use obj.name for meta access)
       if (this.current.type === "Identifier") {
-        const propertyName = this.current.value;
-        const propertyOriginal = this.current.original;
-        this.advance();
-        return this.createNode("ExternalAccess", {
-          object: left,
-          property: propertyName,
-          pos: left.pos,
-          original: left.original + operator.original + propertyOriginal,
-        });
-      } else {
-        // obj.. returns map of all external properties
-        return this.createNode("ExternalAccess", {
-          object: left,
-          property: null,
-          pos: left.pos,
-          original: left.original + operator.original,
-        });
+        this.error("a..name is no longer supported; use a.name for meta property access");
       }
+      // obj.. → META_ALL
+      return this.createNode("ExternalAccess", {
+        object: left,
+        property: null,
+        pos: left.pos,
+        original: left.original + operator.original,
+      });
     } else if (operator.value === ".|") {
       // obj.| returns set of keys
       return this.createNode("KeySet", {

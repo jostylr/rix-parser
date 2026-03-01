@@ -101,6 +101,8 @@ const symbols = [
   "..",
   "|.",
   ".|",
+  // Bulk meta assign (before single . for maximal munch)
+  ".=",
   // Mutation prefix
   "{!",
   "%",
