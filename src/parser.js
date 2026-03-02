@@ -162,6 +162,16 @@ const SYMBOL_TABLE = {
     associativity: "left",
     type: "infix",
   },
+  "?&": {
+    precedence: PRECEDENCE.COMPARISON,
+    associativity: "left",
+    type: "infix",
+  },
+  "!?": {
+    precedence: PRECEDENCE.COMPARISON,
+    associativity: "left",
+    type: "infix",
+  },
 
   // Logical aliases
   "&&": {
@@ -245,6 +255,26 @@ const SYMBOL_TABLE = {
     type: "infix",
     prefix: true,
   },
+  "\\": {
+    precedence: PRECEDENCE.ADDITION,
+    associativity: "left",
+    type: "infix",
+  },
+  "\\/": {
+    precedence: PRECEDENCE.ADDITION,
+    associativity: "left",
+    type: "infix",
+  },
+  "++": {
+    precedence: PRECEDENCE.ADDITION,
+    associativity: "left",
+    type: "infix",
+  },
+  "<>": {
+    precedence: PRECEDENCE.ADDITION,
+    associativity: "left",
+    type: "infix",
+  },
 
   // Base conversion operators
   "_>": {
@@ -279,6 +309,16 @@ const SYMBOL_TABLE = {
     associativity: "left",
     type: "infix",
   },
+  "/\\": {
+    precedence: PRECEDENCE.MULTIPLICATION,
+    associativity: "left",
+    type: "infix",
+  },
+  "**": {
+    precedence: PRECEDENCE.MULTIPLICATION,
+    associativity: "left",
+    type: "infix",
+  },
   "/^": {
     precedence: PRECEDENCE.MULTIPLICATION,
     associativity: "left",
@@ -301,11 +341,6 @@ const SYMBOL_TABLE = {
     associativity: "right",
     type: "infix",
   },
-  "**": {
-    precedence: PRECEDENCE.EXPONENTIATION,
-    associativity: "right",
-    type: "infix",
-  },
 
   // Function arrow (right associative)
   "->": { precedence: PRECEDENCE.ARROW, associativity: "right", type: "infix" },
@@ -320,7 +355,7 @@ const SYMBOL_TABLE = {
     type: "infix",
   },
 
-  // Condition operator
+  // Membership operator (also used for function parameter conditions)
   "?": {
     precedence: PRECEDENCE.CONDITION,
     associativity: "left",
@@ -2682,7 +2717,7 @@ class Parser {
       // Parameter with default value: x := 5 or x := 5 ? condition
       result.param.name = arg.left.name || arg.left.value;
 
-      // Check if the right side has a condition
+      // Extract ? condition if it exists at the top level of the right side
       if (arg.right.type === "BinaryOperation" && arg.right.operator === "?") {
         result.param.defaultValue = arg.right.left;
         result.condition = arg.right.right;
