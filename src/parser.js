@@ -617,7 +617,17 @@ class Parser {
           return this.parseBraceContainer();
         } else if (token.value === "{=" || token.value === "{?" || token.value === "{;" || token.value === "{|" || token.value === "{:" || token.value === "{@" || token.value === "{$") {
           return this.parseBraceSigil(token.value);
-        } else if (token.value === "{+" || token.value === "{*" || token.value === "{&&" || token.value === "{||") {
+        } else if (
+          token.value === "{+" ||
+          token.value === "{*" ||
+          token.value === "{&&" ||
+          token.value === "{||" ||
+          token.value === "{\\/" ||
+          token.value === "{/\\" ||
+          token.value === "{++" ||
+          token.value === "{<<" ||
+          token.value === "{>>"
+        ) {
           return this.parseOperatorBrace(token.value);
         } else if (token.value === "{!") {
           return this.parseBraceSigil(token.value);
@@ -1958,7 +1968,7 @@ class Parser {
 
   parseOperatorBrace(sigil) {
     const startToken = this.current;
-    this.advance(); // consume '{+' or '{*'
+    this.advance(); // consume operator brace sigil
 
     const elements = [];
     if (this.current.value !== "}") {
@@ -1987,6 +1997,11 @@ class Parser {
     else if (sigil === "{*") sysName = "MUL";
     else if (sigil === "{&&") sysName = "AND";
     else if (sigil === "{||") sysName = "OR";
+    else if (sigil === "{\\/") sysName = "NARY_UNION";
+    else if (sigil === "{/\\") sysName = "NARY_INTERSECT";
+    else if (sigil === "{++") sysName = "NARY_CONCAT";
+    else if (sigil === "{<<") sysName = "MIN";
+    else if (sigil === "{>>") sysName = "MAX";
 
     return this.createNode("FunctionCall", {
       function: this.createNode("SystemIdentifier", {

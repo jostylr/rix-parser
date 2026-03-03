@@ -21,6 +21,8 @@ const symbols = [
   "?&",
   "!?",
   "++",
+  "<<",
+  ">>",
   "<>",
   "_>",
   "<_",
@@ -55,10 +57,15 @@ const symbols = [
   ":+",
   ":%",
   // Brace sigil containers (must come before single {)
+  "{++",
   "{+",
   "{*",
   "{&&",
   "{||",
+  "{\\/",
+  "{/\\",
+  "{<<",
+  "{>>",
   "{=",
   "{?",
   "{;",
@@ -877,6 +884,26 @@ function tryMatchOuterIdentifier(input, position) {
 
 function tryMatchRegexLiteral(input, position) {
   const remaining = input.slice(position);
+  // Disambiguate operator-brace sigil `{/\\ ...}` from regex literals like `{/\\s+/}`.
+  if (remaining.startsWith("{/\\")) {
+    let i = 3;
+    let inEscape = false;
+    let foundUnescapedSlash = false;
+    while (i < remaining.length && remaining[i] !== "}") {
+      const ch = remaining[i];
+      if (inEscape) {
+        inEscape = false;
+      } else if (ch === "\\") {
+        inEscape = true;
+      } else if (ch === "/") {
+        foundUnescapedSlash = true;
+        break;
+      }
+      i++;
+    }
+    // No regex closing delimiter before the brace → treat as operator-brace token.
+    if (!foundUnescapedSlash) return null;
+  }
   // Match '{' followed by optional whitespace followed by '/'
   const startMatch = remaining.match(/^\{\s*\//);
   if (!startMatch) return null;
@@ -944,6 +971,8 @@ function tryMatchRegexLiteral(input, position) {
 
     flags = flagsStr.trim();
     if (flags.length > 0 && !/^[a-zA-Z]*$/.test(flags)) {
+      // For `{/\\ ...}` ambiguity, prefer operator-brace parsing.
+      if (remaining.startsWith("{/\\")) return null;
       const { line, col } = posToLineCol(input, position);
       throw new Error(`Invalid modifier or flag in regex literal at line ${line}:${col}.`);
     }

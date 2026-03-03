@@ -8,6 +8,11 @@ function testSystemLookup(name) {
     MUL: { type: "function", arity: 2 },
     AND: { type: "function", arity: 2 },
     OR: { type: "function", arity: 2 },
+    NARY_UNION: { type: "function", arity: -1 },
+    NARY_INTERSECT: { type: "function", arity: -1 },
+    NARY_CONCAT: { type: "function", arity: -1 },
+    MIN: { type: "function", arity: -1 },
+    MAX: { type: "function", arity: -1 },
   };
   return ops[name] || { type: "unknown" };
 }
@@ -62,5 +67,35 @@ describe("N-ary operator braces and logically aliases", () => {
     expect(result[0].expression.type).toBe("FunctionCall");
     expect(result[0].expression.function.name).toBe("OR");
     expect(result[0].expression.arguments.positional.length).toBe(2);
+  });
+  test("{\\/ A, B, C}", () => {
+    const result = stripMetadata(parseCode("{\\/ A, B, C};"));
+    expect(result[0].expression.type).toBe("FunctionCall");
+    expect(result[0].expression.function.name).toBe("NARY_UNION");
+    expect(result[0].expression.arguments.positional.length).toBe(3);
+  });
+  test("{/\\ A, B, C}", () => {
+    const result = stripMetadata(parseCode("{/\\ A, B, C};"));
+    expect(result[0].expression.type).toBe("FunctionCall");
+    expect(result[0].expression.function.name).toBe("NARY_INTERSECT");
+    expect(result[0].expression.arguments.positional.length).toBe(3);
+  });
+  test("{++ A, B, C}", () => {
+    const result = stripMetadata(parseCode("{++ A, B, C};"));
+    expect(result[0].expression.type).toBe("FunctionCall");
+    expect(result[0].expression.function.name).toBe("NARY_CONCAT");
+    expect(result[0].expression.arguments.positional.length).toBe(3);
+  });
+  test("{<< 5, 2, 9, -3}", () => {
+    const result = stripMetadata(parseCode("{<< 5, 2, 9, -3};"));
+    expect(result[0].expression.type).toBe("FunctionCall");
+    expect(result[0].expression.function.name).toBe("MIN");
+    expect(result[0].expression.arguments.positional.length).toBe(4);
+  });
+  test("{>> 5, 2, 9, -3}", () => {
+    const result = stripMetadata(parseCode("{>> 5, 2, 9, -3};"));
+    expect(result[0].expression.type).toBe("FunctionCall");
+    expect(result[0].expression.function.name).toBe("MAX");
+    expect(result[0].expression.arguments.positional.length).toBe(4);
   });
 });

@@ -1534,13 +1534,15 @@ describe("Math Oracle Tokenizer", () => {
       });
 
       test("comparison operators", () => {
-        const tokens = tokenize("<= >= == !=");
+        const tokens = tokenize("<= >= == != << >>");
         expect(tokens).toEqual(
           withEnd([
             { type: "Symbol", original: "<=", value: "<=", pos: [0, 0, 2] },
             { type: "Symbol", original: " >=", value: ">=", pos: [2, 3, 5] },
             { type: "Symbol", original: " ==", value: "==", pos: [5, 6, 8] },
             { type: "Symbol", original: " !=", value: "!=", pos: [8, 9, 11] },
+            { type: "Symbol", original: " <<", value: "<<", pos: [11, 12, 14] },
+            { type: "Symbol", original: " >>", value: ">>", pos: [14, 15, 17] },
           ]),
         );
       });
