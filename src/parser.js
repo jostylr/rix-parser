@@ -750,14 +750,17 @@ class Parser {
 
     let right;
     if (operator.value === "[" && symbolInfo.type === "postfix") {
-      // Check for key literal syntax: obj[:name]
-      if (this.current.value === ":" && this.peek().type === "Identifier") {
+      // Check for key literal syntax: obj[:name], obj[:1], obj[:"1"]
+      if (
+        this.current.value === ":" &&
+        ["Identifier", "Number", "String"].includes(this.peek().type)
+      ) {
         this.advance(); // consume ':'
         const keyName = this.current.value;
         const keyOriginal = this.current.original;
         this.advance(); // consume identifier
         if (this.current.value !== "]") {
-          this.error("Expected ] after key literal [:name]");
+          this.error("Expected ] after key literal");
         }
         this.advance(); // consume ']'
         return this.createNode("PropertyAccess", {
