@@ -2060,6 +2060,20 @@ class Parser {
         }
 
         const element = this.parseExpression(0);
+        if (
+          sigil === "{=" &&
+          element &&
+          element.type === "BinaryOperation" &&
+          (element.operator === "=" || element.operator === ":=")
+        ) {
+          const lhsType = element.left?.type;
+          const isIdentifierSugar =
+            lhsType === "UserIdentifier" || lhsType === "SystemIdentifier";
+          const isParenthesizedExpr = lhsType === "Grouping";
+          if (!isIdentifierSugar && !isParenthesizedExpr) {
+            this.error("Map key expressions must be parenthesized in literals: use {= (expr)=value }");
+          }
+        }
         elements.push(element);
 
         // Check for separator
