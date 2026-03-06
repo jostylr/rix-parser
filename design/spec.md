@@ -611,10 +611,10 @@ RiX provides three postfix operators with the highest precedence for precision c
 
 ## 12. Scope, Mutability, and Variable Rules
 
-* **Variables are block-scoped, mutable.**
+* **Variables are mutable. Function bodies, explicit blocks (`{; ... }`), loops (`{@ ... }`), and system blocks (`{$ ... }`) are block-scoped.**
 * Special scope access:
 
-  * `@var` references variable outside block
+  * `@var` references variable outside the current isolated block scope
   * `@var :@= ...` assigns at that scope
   * More `@` to climb higher scope levels
 * Arrays, maps, sets, etc. are mutable by default.
