@@ -660,10 +660,10 @@ class Parser {
             const opToken = this.current;
             this.advance(); // consume the operator symbol
             const sysName = operatorToSystem[nextVal];
-            return this.createNode("SystemIdentifier", {
-              name: sysName,
-              systemInfo: this.systemLookup(sysName),
-              original: token.original + opToken.original
+            // @+ is a read-only alias for .ADD — produce SystemAccess node
+            return this.createNode("SystemAccess", {
+              property: sysName,
+              original: token.original + opToken.original,
             });
           }
 
@@ -677,6 +677,22 @@ class Parser {
         } else if (token.value === "'") {
           // Leading quote for integral
           return this.parseIntegral();
+        } else if (token.value === ".") {
+          // Leading dot: system context object access
+          // . alone → SystemObject (the system context itself)
+          // .Name   → SystemAccess (a capability or meta flag)
+          this.advance(); // consume '.'
+          if (this.current.type === "Identifier") {
+            const propToken = this.current;
+            this.advance();
+            return this.createNode("SystemAccess", {
+              property: propToken.value,
+              original: token.original + propToken.original,
+            });
+          }
+          return this.createNode("SystemObject", {
+            original: token.original,
+          });
         } else if (token.value === "_") {
           // Underscore is always a null symbol
           this.advance();
@@ -2016,6 +2032,7 @@ class Parser {
         positional: elements,
         keyword: {}
       },
+      fromBrace: true,  // distinguishes syntax-generated calls from user-typed calls
       pos: startToken.pos,
       original: sigil,
     });
@@ -2886,6 +2903,17 @@ class Parser {
         arguments: args,
         pos: target.pos,
         original: target.original + "(...)",
+      });
+    }
+
+    // SystemAccess (.Name) calls produce SystemCall nodes
+    if (target.type === "SystemAccess") {
+      return this.createNode("SystemCall", {
+        name: target.property,
+        arguments: args,
+        pos: target.pos,
+        original: target.original + "(...)",
+        viaSystemContext: true,
       });
     }
 
