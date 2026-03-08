@@ -2269,4 +2269,93 @@ describe("Math Oracle Tokenizer", () => {
       expect(numbers[0].value).toBe("~0b101.~11~10");
     });
   });
+
+  describe("Brace sigil space/name rule", () => {
+    test("{@ without space throws error", () => {
+      expect(() => tokenize("{@a += x}")).toThrow(/must be followed by a space/);
+    });
+
+    test("{@ with space produces anonymous {@ token", () => {
+      const tokens = tokenize("{@ a }");
+      const brace = tokens.find((t) => t.value === "{@");
+      expect(brace).toBeDefined();
+      expect(brace.containerName).toBe(null);
+    });
+
+    test("{@cool@ produces named {@ token with containerName 'cool'", () => {
+      const tokens = tokenize("{@cool@ a }");
+      const brace = tokens.find((t) => t.value === "{@");
+      expect(brace).toBeDefined();
+      expect(brace.containerName).toBe("cool");
+    });
+
+    test("{;hot1; produces named {; token with containerName 'hot1'", () => {
+      const tokens = tokenize("{;hot1; stmt }");
+      const brace = tokens.find((t) => t.value === "{;");
+      expect(brace).toBeDefined();
+      expect(brace.containerName).toBe("hot1");
+    });
+
+    test("{|name| produces named {| token with containerName 'name'", () => {
+      const tokens = tokenize("{|name| 1, 2 |}");
+      const brace = tokens.find((t) => t.value === "{|");
+      expect(brace).toBeDefined();
+      expect(brace.containerName).toBe("name");
+    });
+
+    test("{+ without space throws error", () => {
+      expect(() => tokenize("{+1, 2}")).toThrow(/must be followed by a space/);
+    });
+
+    test("{+ with space produces {+ token", () => {
+      const tokens = tokenize("{+ 1, 2}");
+      const brace = tokens.find((t) => t.value === "{+");
+      expect(brace).toBeDefined();
+    });
+
+    test("{ without space throws error", () => {
+      expect(() => tokenize("{expr}")).toThrow(/must be followed by a space/);
+    });
+
+    test("{ with space produces plain { token", () => {
+      const tokens = tokenize("{ expr }");
+      const brace = tokens.find((t) => t.value === "{");
+      expect(brace).toBeDefined();
+    });
+
+    test("{/regex/flags} is exempt (handled as RegexLiteral)", () => {
+      const tokens = tokenize("{/\\d+/g}");
+      const regex = tokens.find((t) => t.type === "RegexLiteral");
+      expect(regex).toBeDefined();
+      expect(regex.pattern).toBe("\\d+");
+      expect(regex.flags).toBe("g");
+    });
+
+    test("{digit} passes through without error (unit notation)", () => {
+      expect(() => tokenize("{2}")).not.toThrow();
+      const tokens = tokenize("{2}");
+      const sym = tokens.find((t) => t.value === "{");
+      expect(sym).toBeDefined();
+    });
+
+    test("named container name is lowercased", () => {
+      const tokens = tokenize("{@LOOP@ body }");
+      const brace = tokens.find((t) => t.value === "{@");
+      expect(brace).toBeDefined();
+      expect(brace.containerName).toBe("loop");
+    });
+
+    test("{|| with space produces {|| operator-brace token (not sigil)", () => {
+      const tokens = tokenize("{|| 1, 2}");
+      const brace = tokens.find((t) => t.value === "{||");
+      expect(brace).toBeDefined();
+    });
+
+    test("{| with space produces {| sigil token (not operator)", () => {
+      const tokens = tokenize("{| 1, 2 |}");
+      const brace = tokens.find((t) => t.value === "{|");
+      expect(brace).toBeDefined();
+      expect(brace.containerName).toBe(null);
+    });
+  });
 });

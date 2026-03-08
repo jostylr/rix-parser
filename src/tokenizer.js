@@ -56,23 +56,6 @@ const symbols = [
   "::",
   ":+",
   ":%",
-  // Brace sigil containers (must come before single {)
-  "{++",
-  "{+",
-  "{*",
-  "{&&",
-  "{||",
-  "{\\/",
-  "{/\\",
-  "{<<",
-  "{>>",
-  "{=",
-  "{?",
-  "{;",
-  "{|",
-  "{:",
-  "{@",
-  "{$",
   "+=",
   "-=",
   "*=",
@@ -214,6 +197,11 @@ function tokenize(input) {
     if (!token) {
       // Try to match regex literals first (so '{/' is not seen as '{' followed by '/')
       token = tryMatchRegexLiteral(input, position);
+    }
+    if (!token) {
+      // Try to match brace forms (sigil containers, operator braces, plain blocks)
+      // This enforces mandatory space after '{' and after sigil sequences.
+      token = tryMatchBrace(input, position);
     }
     if (!token) {
       // Try to match semicolon sequences first (before general symbols)
@@ -807,6 +795,116 @@ function tryMatchSemicolonSequence(input, position) {
   }
 
   return null;
+}
+
+function tryMatchBrace(input, position) {
+  if (input[position] !== "{") return null;
+
+  const isWhitespace = (c) => c === " " || c === "\t" || c === "\n" || c === "\r" || c === undefined;
+  const ch = input[position + 1]; // char immediately after {
+
+  // 1. Operator brace detection (longest sequences first)
+  const operatorSequences = ["&&", "||", "\\/", "/\\", "++", "<<", ">>", "+", "*"];
+  for (const seq of operatorSequences) {
+    if (input.slice(position + 1).startsWith(seq)) {
+      const after = input[position + 1 + seq.length];
+      if (!isWhitespace(after)) {
+        const { line, col } = posToLineCol(input, position);
+        throw new Error(
+          `Operator brace '{${seq}' must be followed by a space at line ${line}:${col}`
+        );
+      }
+      return {
+        type: "Symbol",
+        original: "{" + seq,
+        value: "{" + seq,
+        pos: [position, position, position + 1 + seq.length],
+      };
+    }
+  }
+
+  // 2. Sigil container detection
+  const sigilChars = new Set(["@", ";", "|", ":", "=", "?", "$"]);
+  if (sigilChars.has(ch)) {
+    const sigil = ch;
+    const after = input[position + 2];
+
+    // 2a. Space immediately → anonymous container
+    if (isWhitespace(after)) {
+      return {
+        type: "Symbol",
+        original: "{" + sigil,
+        value: "{" + sigil,
+        containerName: null,
+        pos: [position, position, position + 2],
+      };
+    }
+
+    // 2b. Name-between-sigils → named container: {sigil name sigil}
+    if (after !== undefined && /[a-zA-Z0-9_]/.test(after)) {
+      let nameLen = 0;
+      while (
+        position + 2 + nameLen < input.length &&
+        /[a-zA-Z0-9_]/.test(input[position + 2 + nameLen])
+      ) {
+        nameLen++;
+      }
+      const name = input.slice(position + 2, position + 2 + nameLen);
+      const closingSigilPos = position + 2 + nameLen;
+      if (input[closingSigilPos] === sigil) {
+        const afterName = input[closingSigilPos + 1];
+        if (!isWhitespace(afterName)) {
+          const { line, col } = posToLineCol(input, position);
+          throw new Error(
+            `Named container '{${sigil}${name}${sigil}' must be followed by a space at line ${line}:${col}`
+          );
+        }
+        const tokenLen = 1 + 1 + nameLen + 1; // { sigil name closingSigil
+        return {
+          type: "Symbol",
+          original: "{" + sigil + name + sigil,
+          value: "{" + sigil,
+          containerName: name.toLowerCase(),
+          pos: [position, position, position + tokenLen],
+        };
+      }
+      // Name not followed by closing sigil → error
+      const { line, col } = posToLineCol(input, position);
+      throw new Error(
+        `Brace sigil '{${sigil}' must be followed by a space or 'name${sigil}' (e.g. '{${sigil}myname${sigil} ...') at line ${line}:${col}`
+      );
+    }
+
+    // 2c. Not whitespace, not alphanumeric → error
+    const { line, col } = posToLineCol(input, position);
+    throw new Error(
+      `Brace sigil '{${sigil}' must be followed by a space or a name (e.g. '{${sigil} ...' or '{${sigil}myname${sigil} ...') at line ${line}:${col}`
+    );
+  }
+
+  // 3. Plain brace: must be followed by space
+  if (isWhitespace(ch)) {
+    return {
+      type: "Symbol",
+      original: "{",
+      value: "{",
+      pos: [position, position, position + 1],
+    };
+  }
+
+  // 4. { followed by something that should pass through to the symbols list:
+  //    - {! mutation-in-place sigil
+  //    - {} empty block (ch === "}")
+  //    - {digit — allows {2} inside scientific unit notation ~[m{2}]
+  if (ch === "!" || ch === "}" || ch === undefined || (ch >= "0" && ch <= "9")) {
+    return null;
+  }
+
+  // 5. All other cases: error (missing space after {)
+  const { line, col } = posToLineCol(input, position);
+  throw new Error(
+    `'{' must be followed by a space, a sigil (@;|:=?$), or an operator (+, *, &&, ||, \\/, /\\, ++, <<, >>) at line ${line}:${col}`
+  );
 }
 
 function tryMatchSymbol(input, position) {

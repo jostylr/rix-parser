@@ -644,7 +644,7 @@ describe("RiX Parser", () => {
     });
 
     test("block with elements (plain braces)", () => {
-      const ast = parseCode("{a, b, c};");
+      const ast = parseCode("{ a, b, c};");
       expect(stripMetadata(ast)).toEqual([
         {
           type: "Statement",
@@ -678,7 +678,7 @@ describe("RiX Parser", () => {
     });
 
     test("block with key-value pairs (previously map)", () => {
-      const ast = parseCode("{a := 4, b := 5};");
+      const ast = parseCode("{ a := 4, b := 5};");
       expect(stripMetadata(ast)).toEqual([
         {
           type: "Statement",
@@ -704,7 +704,7 @@ describe("RiX Parser", () => {
     });
 
     test("pattern matching in plain block", () => {
-      const ast = parseCode("{(x) -> x + 1, (y) -> y * 2};");
+      const ast = parseCode("{ (x) -> x + 1, (y) -> y * 2};");
       expect(stripMetadata(ast)).toEqual([
         {
           type: "Statement",
@@ -1051,11 +1051,68 @@ describe("RiX Parser", () => {
         },
       ]);
     });
+
+    test("block import header parses on explicit block", () => {
+      const expr = stripMetadata(parseCode("{; <a~x> a };"))[0].expression;
+      expect(expr).toEqual({
+        type: "BlockContainer",
+        imports: [
+          { local: "a", source: "x", mode: "copy" },
+        ],
+        elements: [
+          { type: "UserIdentifier", name: "a" },
+        ],
+      });
+    });
+
+    test("block import header parses mixed copy and alias forms", () => {
+      const expr = stripMetadata(parseCode("{; <a~x, b=y, z=, r> a + b };"))[0].expression;
+      expect(expr.imports).toEqual([
+        { local: "a", source: "x", mode: "copy" },
+        { local: "b", source: "y", mode: "alias" },
+        { local: "z", source: "z", mode: "alias" },
+        { local: "r", source: "r", mode: "copy" },
+      ]);
+      expect(expr.elements[0].type).toBe("BinaryOperation");
+    });
+
+    test("plain block import header parses", () => {
+      const expr = stripMetadata(parseCode("{ <x, y=> x + y };"))[0].expression;
+      expect(expr.type).toBe("BlockContainer");
+      expect(expr.imports).toEqual([
+        { local: "x", source: "x", mode: "copy" },
+        { local: "y", source: "y", mode: "alias" },
+      ]);
+    });
+
+    test("empty import header is rejected", () => {
+      expect(() => parseCode("{; <> a };")).toThrow("Import header cannot be empty");
+    });
+
+    test("invalid double tilde import is rejected", () => {
+      expect(() => parseCode("{; <a~~x> a };")).toThrow("Malformed import header");
+    });
+
+    test("invalid double equals import is rejected", () => {
+      expect(() => parseCode("{; <a==x> a };")).toThrow("Malformed import header");
+    });
+
+    test("trailing comma in import header is rejected", () => {
+      expect(() => parseCode("{; <a~x,> a };")).toThrow("Trailing comma is not allowed in import header");
+    });
+
+    test("missing comma in import header is rejected", () => {
+      expect(() => parseCode("{; <a~x b=y> a };")).toThrow("Malformed import header");
+    });
+
+    test("duplicate local targets in import header are rejected", () => {
+      expect(() => parseCode("{; <a~x, a=y> a };")).toThrow("Duplicate import target 'a'");
+    });
   });
 
   describe("Code blocks", () => {
     test("empty code block", () => {
-      const ast = parseCode("{;};");
+      const ast = parseCode("{; };");
       expect(stripMetadata(ast)).toEqual([
         {
           type: "Statement",
@@ -1068,7 +1125,7 @@ describe("RiX Parser", () => {
     });
 
     test("code block with single expression", () => {
-      const ast = parseCode("{;x := 1};");
+      const ast = parseCode("{; x := 1};");
       expect(stripMetadata(ast)).toEqual([
         {
           type: "Statement",
@@ -1088,7 +1145,7 @@ describe("RiX Parser", () => {
     });
 
     test("code block with multiple elements", () => {
-      const ast = parseCode("{;x := 1; y := 2};");
+      const ast = parseCode("{; x := 1; y := 2};");
       expect(stripMetadata(ast)).toEqual([
         {
           type: "Statement",
@@ -1114,7 +1171,7 @@ describe("RiX Parser", () => {
     });
 
     test("code block with expressions", () => {
-      const ast = parseCode("{;a + b; c * d};");
+      const ast = parseCode("{; a + b; c * d};");
       expect(stripMetadata(ast)).toEqual([
         {
           type: "Statement",
@@ -1140,8 +1197,8 @@ describe("RiX Parser", () => {
     });
 
     test("nested blocks using plain braces", () => {
-      const codeBlock = parseCode("{;3};");
-      const nestedBlock = parseCode("{ {3} };");
+      const codeBlock = parseCode("{; 3};");
+      const nestedBlock = parseCode("{ { 3 } };");
 
       expect(stripMetadata(codeBlock)).toEqual([
         {
@@ -2760,7 +2817,7 @@ describe("RiX Parser", () => {
       });
 
       test("unmatched brace throws error", () => {
-        expect(() => parseCode("{a, b;")).toThrow(/Expected closing brace/);
+        expect(() => parseCode("{ a, b;")).toThrow(/Expected closing brace/);
       });
 
       test("invalid metadata key throws error", () => {

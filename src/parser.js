@@ -616,7 +616,7 @@ class Parser {
         } else if (token.value === "{") {
           return this.parseBraceContainer();
         } else if (token.value === "{=" || token.value === "{?" || token.value === "{;" || token.value === "{|" || token.value === "{:" || token.value === "{@" || token.value === "{$") {
-          return this.parseBraceSigil(token.value);
+          return this.parseBraceSigil(token.value, token.containerName ?? null);
         } else if (
           token.value === "{+" ||
           token.value === "{*" ||
@@ -630,7 +630,7 @@ class Parser {
         ) {
           return this.parseOperatorBrace(token.value);
         } else if (token.value === "{!") {
-          return this.parseBraceSigil(token.value);
+          return this.parseBraceSigil(token.value, null);
         } else if (token.value === "@") {
           // @ followed by { or brace sigil = deferred block: @{; ...}, @{? ...}, @{...}
           this.advance(); // consume '@'
@@ -640,7 +640,7 @@ class Parser {
             if (nextVal === "{") {
               inner = this.parseBraceContainer();
             } else {
-              inner = this.parseBraceSigil(nextVal);
+              inner = this.parseBraceSigil(nextVal, this.current.containerName ?? null);
             }
             return this.createNode("DeferredBlock", {
               body: inner,
@@ -1951,6 +1951,7 @@ class Parser {
     const startToken = this.current;
     this.advance(); // consume '{'
 
+    const imports = this.startsImportHeader() ? this.parseImportHeader() : [];
     const elements = [];
 
     if (this.current.value !== "}") {
@@ -1979,6 +1980,7 @@ class Parser {
     this.advance(); // consume '}'
 
     return this.createNode("BlockContainer", {
+      ...(imports.length > 0 ? { imports: imports } : {}),
       elements: elements,
       pos: startToken.pos,
       original: startToken.original,
@@ -2039,7 +2041,7 @@ class Parser {
   }
 
   // Parse brace sigil containers: {= map, {? case, {; block, {| set, {: tuple, {@ loop
-  parseBraceSigil(sigil) {
+  parseBraceSigil(sigil, containerName = null) {
     const startToken = this.current;
     this.advance(); // consume the sigil token (e.g., '{=')
 
@@ -2066,6 +2068,10 @@ class Parser {
     const isCloser = (val) => closers.includes(val);
     const separator = isTemporal ? ";" : ",";
 
+    const imports =
+      (sigil === "{;" || sigil === "{@" || sigil === "{$") && this.startsImportHeader()
+        ? this.parseImportHeader()
+        : [];
     const elements = [];
 
     if (!isCloser(this.current.value)) {
@@ -2123,10 +2129,77 @@ class Parser {
     this.advance(); // consume closer
     return this.createNode(nodeType, {
       sigil: sigil,
+      ...(containerName ? { name: containerName } : {}),
+      ...(imports.length > 0 ? { imports: imports } : {}),
       elements: elements,
       pos: startToken.pos,
       original: startToken.original,
     });
+  }
+
+  startsImportHeader() {
+    return this.current.value === "<" || this.current.value === "<>";
+  }
+
+  parseImportHeader() {
+    const startIndex = this.position - 1;
+    let raw = "";
+    let endIndex = -1;
+
+    for (let i = startIndex; i < this.tokens.length; i++) {
+      const token = this.tokens[i];
+      if (token.type === "String" && token.kind === "comment") {
+        continue;
+      }
+      const original = token.original ?? String(token.value ?? "");
+      const start = i === startIndex ? original.indexOf("<") + 1 : 0;
+      const end = original.indexOf(">", start);
+      if (end !== -1) {
+        raw += original.slice(start, end);
+        endIndex = i;
+        break;
+      }
+      raw += original.slice(start);
+    }
+
+    if (endIndex === -1) {
+      this.error("Unterminated import header");
+    }
+
+    this.position = endIndex + 1;
+    this.advance();
+
+    const text = raw.trim();
+    if (!text.length) {
+      this.error("Import header cannot be empty");
+    }
+
+    const seenLocals = new Set();
+    const imports = [];
+
+    const pieces = raw.split(",");
+    for (const piece of pieces) {
+      const spec = piece.trim();
+      if (!spec.length) {
+        this.error("Trailing comma is not allowed in import header");
+      }
+      const match = spec.match(/^([\p{L}_][\p{L}\p{N}_]*)(?:\s*([~=])\s*([\p{L}_][\p{L}\p{N}_]*)?)?$/u);
+      if (!match) {
+        this.error("Malformed import header");
+      }
+
+      const [, local, operator, explicitSource] = match;
+      const mode = operator === "=" ? "alias" : "copy";
+      const source = explicitSource || local;
+
+      if (seenLocals.has(local)) {
+        this.error(`Duplicate import target '${local}' in block import header`);
+      }
+      seenLocals.add(local);
+      imports.push({ local, source, mode });
+    }
+
+    return imports;
   }
 
   // Parse mutation syntax: obj{= +a=3, -.b, +c} or obj{! +a=3, -.b}
