@@ -1420,10 +1420,39 @@ It's crucial to understand the difference between code blocks `{; }` and brace c
 | Construct | Syntax | Purpose | Example |
 |-----------|--------|---------|---------|
 | Code Block | `{; }` | Assignable code execution | `{;x := 1; y := x + 1}` |
+| **Tuple** | **`{: }`** | **Explicit tuple literal** | **`{: 1, 2, 3}`** |
 | Set | `{ }` | Mathematical set | `{1, 2, 3}` |
-| Map | `{ }` | Key-value pairs | `{name := "Alice", age := 30}` |
+| Map | `{= }` | Key-value pairs | `{= name := "Alice", age := 30}` |
 | Pattern Match | `{ }` | Pattern matching | `{(0) :=> "zero", (1) :=> "one"}` |
 | System | `{ }` | Equation systems | `{x :=: 2*y; y :>: 0}` |
+
+### `{: }` Tuple Container vs `( )` Grouping
+
+`{: 1, 2, 3}` and `(1, 2, 3)` both produce a 3-element tuple and are equivalent. However, there is an important difference when the content is itself a tuple expression:
+
+```rix
+{: 1, 2, 3}      // TupleContainer with 3 comma-separated elements → tuple (1,2,3)
+(1, 2, 3)        // Tuple literal → tuple (1,2,3)
+// These two are equivalent ✓
+
+{: (1, 2, 3)}    // TupleContainer with ONE element: the inner tuple (1,2,3)
+                 // → a 1-element tuple containing (1,2,3), i.e. ((1,2,3),)
+((1, 2, 3))      // Outer parens are just grouping — same as (1,2,3)
+// These two are NOT equivalent!
+```
+
+The reason: `{: }` uses commas as **element separators at the block level**. When you write `{: (1,2,3)}`, the inner commas belong to the inner tuple expression — the `{:` container sees only one element (the tuple `(1,2,3)`), which it wraps in an outer tuple. By contrast, `((1,2,3))` is just parenthetical grouping around an already-complete tuple expression.
+
+This distinction matters for piping:
+
+```rix
+{: (1, 2, 3)} |> F    // callArgs = [(1,2,3)] — F receives the inner tuple as one arg
+                       // because the outer 1-element tuple unpacks to a single element
+(1, 2, 3) |> F        // callArgs = [1, 2, 3] — F receives three separate args
+
+// If you want to pipe a tuple as a single argument, use _0:
+(1, 2, 3) ||> F(_0)   // F receives (1,2,3) as one arg — cleaner than {: (1,2,3)}
+```
 
 ### Spacing Examples:
 ```javascript
@@ -1735,11 +1764,12 @@ tuple ||> AnyExpression
 `PIPE_EXPLICIT` recursively walks the entire IR of the right-hand expression before evaluation, substituting `PLACEHOLDER` nodes with already-evaluated tuple values. Because substitution happens at the IR level, the right side can be a function call, a tuple, an array literal, a map/record literal, or any compound expression — whatever you write, the placeholders are filled in first, then it evaluates normally.
 
 #### Placeholder Rules
-- `_1`, `_2`, `_3`, ... refer to first, second, third, etc. tuple elements (1-based)
+- **`_0`** — the entire left-hand value, passed as a single argument (the whole tuple, not unpacked)
+- **`_1`, `_2`, `_3`, …** — individual tuple elements, 1-based
 - Placeholders can be reordered: `_2, _1` swaps arguments
 - Placeholders can be duplicated: `_1, _1` repeats the first element
 - Placeholders can be skipped: `_3, _1` uses only the first and third elements
-- A scalar left side is treated as a one-element tuple (`_1` refers to it)
+- A scalar left side is treated as a one-element tuple (`_1` and `_0` both refer to it)
 - Out-of-range placeholders (e.g. `_5` on a 2-element tuple) raise a runtime error
 
 #### Examples — piping into a function
@@ -1749,6 +1779,7 @@ tuple ||> AnyExpression
 (5, 2) ||> SUB(_1, _1)         // SUB(5, 5) = 0  (duplicate first)
 (1, 2, 3) ||> G(_3, _2, _1)    // G(3, 2, 1) — reversed
 (a, b, c, d) ||> H(_4, _1, _3) // H(d, a, c) — selective
+(1, 2, 3) ||> F(_0)            // F receives the whole tuple (1,2,3) as one arg
 ```
 
 #### Examples — restructuring without a function
@@ -1760,6 +1791,7 @@ Because `||>` substitutes placeholders in *any* right-side expression, it double
 (1, 2, 3) ||> [_2, _1, _3]           // [2, 1, 3]  — reorder into an array
 (1, 2, 3) ||> {= a=_2, b=_1, c=_3}  // {= a=2, b=1, c=3 } — project into a record
 (x, y)    ||> (_1 + _2, _1 - _2)     // (x+y, x-y) — compute multiple results
+(1, 2, 3) ||> [_0]                   // [(1,2,3)] — wrap whole tuple as one array element
 ```
 
 No helper function needed — `||>` with a literal on the right is equivalent to an anonymous structural mapping.

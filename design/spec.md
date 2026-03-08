@@ -549,11 +549,12 @@ RiX provides three postfix operators with the highest precedence for precision c
   * `(3, 4) |> F` is `F(3, 4)` — tuple unpacked
   * `5 |> F` is `F(5)` — scalar passed directly
   * `[1, 2] |> F` is `F([1, 2])` — array is a single arg
-* **Explicit pipe (`||>`):** General IR-template substitution — substitutes placeholders in *any* right-side expression, then evaluates. The right side need not be a function call:
+* **Explicit pipe (`||>`):** General IR-template substitution — substitutes placeholders in *any* right-side expression, then evaluates. The right side need not be a function call. Placeholder `_0` refers to the whole left-hand value; `_1`, `_2`, … refer to individual tuple elements (1-based):
 
   * `(1, 2) ||> F(_2, _1)` is `F(2, 1)` — swapped args (contrast: `(1,2) |> F` is `F(1,2)`)
   * `(5, 2) ||> F(_1, _1)` is `F(5, 5)` — duplicated first element
   * `(1, 2, 3) ||> F(_3, _2, _1)` is `F(3, 2, 1)` — reversed
+  * `(1, 2, 3) ||> F(_0)` is `F((1,2,3))` — whole tuple as one arg
   * `(1, 2, 3) ||> (_2, _1, _3)` is `(2, 1, 3)` — reorder into a new tuple
   * `(1, 2, 3) ||> [_2, _1, _3]` is `[2, 1, 3]` — reorder into an array
   * `(1, 2, 3) ||> {= a=_2, b=_1, c=_3}` is `{= a=2, b=1, c=3}` — project into a record
@@ -561,6 +562,7 @@ RiX provides three postfix operators with the highest precedence for precision c
 
   * `(a, b, c)` unpacks as multiple args under `|>` or provides indexed elements `_1`, `_2`, `_3` under `||>`
   * `[a, b, c]` passes as a single arg in both `|>` and `||>`
+* **`{: }` Tuple Container vs `( )` grouping:** `{: 1, 2, 3}` ≡ `(1, 2, 3)` (3-element tuple), but `{: (1, 2, 3)}` is a *1-element* tuple containing the inner tuple — the `{:` container sees one comma-separated element. Use `(1, 2, 3) ||> F(_0)` when you want to pass a tuple as a single argument without wrapping it in another tuple.
 
 ---
 
