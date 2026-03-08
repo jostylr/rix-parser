@@ -1687,7 +1687,7 @@ Piping operators allow data to flow from left to right through a sequence of tra
 
 ### Simple Pipe (`|>`)
 
-The simple pipe operator feeds the left operand as arguments to the right function. Tuples are automatically unpacked as multiple arguments.
+The simple pipe operator feeds the left operand as arguments to the right function. **Tuples are automatically unpacked as positional arguments; arrays and all other values are passed as a single argument.**
 
 #### Syntax
 ```
@@ -1695,12 +1695,21 @@ value |> function
 tuple |> function
 ```
 
+#### Tuple unpacking vs. single-value passing
+
+| Left operand | How it arrives at the function |
+|---|---|
+| Tuple `(a, b, c)` | Unpacked — `f(a, b, c)` |
+| Array `[a, b, c]` | Single arg — `f([a, b, c])` |
+| Scalar `x` | Single arg — `f(x)` |
+
 #### Examples
 ```rix
-3 |> f                    // f(3)
-(3, 4) |> f              // f(3, 4) - tuple unpacked
-[1, 2, 3] |> sum         // sum([1, 2, 3])
-x |> sqrt |> abs         // abs(sqrt(x)) - left associative
+3 |> F                    // F(3)
+(3, 4) |> F              // F(3, 4) — tuple unpacked into two positional args
+(1, 2) |> SUB            // SUB(1, 2) — where SUB(x,y) :-> x - y gives -1
+[1, 2, 3] |> Sum         // Sum([1, 2, 3]) — array passed as one arg
+x |> Sqrt |> Abs         // Abs(Sqrt(x)) — left associative
 ```
 
 #### AST Structure
@@ -1714,35 +1723,53 @@ x |> sqrt |> abs         // abs(sqrt(x)) - left associative
 
 ### Explicit Pipe (`||>`)
 
-The explicit pipe operator allows precise control over argument positioning using placeholders (`_1`, `_2`, etc.). This enables argument reordering, duplication, and selective usage.
+The explicit pipe operator is a **general IR-template substitution operator**. It evaluates the left side into a tuple, then replaces every placeholder (`_1`, `_2`, …) anywhere in the right-side expression with the corresponding tuple element, and evaluates the result. The right side does **not** have to be a function call — it can be any expression.
 
 #### Syntax
 ```
-tuple ||> function(_N, _M, ...)
+tuple ||> AnyExpression
 ```
+
+#### How it works
+
+`PIPE_EXPLICIT` recursively walks the entire IR of the right-hand expression before evaluation, substituting `PLACEHOLDER` nodes with already-evaluated tuple values. Because substitution happens at the IR level, the right side can be a function call, a tuple, an array literal, a map/record literal, or any compound expression — whatever you write, the placeholders are filled in first, then it evaluates normally.
 
 #### Placeholder Rules
-- `_1`, `_2`, `_3`, ... refer to first, second, third, etc. tuple elements
-- `__1`, `___1` etc. are also valid placeholder formats
-- Placeholders can be duplicated: `_1, _1, _2`
-- Placeholders can be skipped: `_3, _1` (skips `_2`)
-- Placeholders can be reordered: `_2, _1` (swaps arguments)
+- `_1`, `_2`, `_3`, ... refer to first, second, third, etc. tuple elements (1-based)
+- Placeholders can be reordered: `_2, _1` swaps arguments
+- Placeholders can be duplicated: `_1, _1` repeats the first element
+- Placeholders can be skipped: `_3, _1` uses only the first and third elements
+- A scalar left side is treated as a one-element tuple (`_1` refers to it)
+- Out-of-range placeholders (e.g. `_5` on a 2-element tuple) raise a runtime error
 
-#### Examples
+#### Examples — piping into a function
 ```rix
-(3, 4) ||> f(_2, _1)           // f(4, 3) - swap arguments
-(1, 2, 3) ||> g(_3, _2, _1)    // g(3, 2, 1) - reverse
-(x, y) ||> func(_1, _1, _2)    // func(x, x, y) - duplicate
-(a, b, c, d) ||> h(_4, _1, _3) // h(d, a, c) - selective
+(1, 2) ||> SUB(_2, _1)         // SUB(2, 1) = 1  (compare: (1,2) |> SUB = -1)
+(3, 4) ||> SUB(_1, _2)         // SUB(3, 4) = -1 (same order as |>)
+(5, 2) ||> SUB(_1, _1)         // SUB(5, 5) = 0  (duplicate first)
+(1, 2, 3) ||> G(_3, _2, _1)    // G(3, 2, 1) — reversed
+(a, b, c, d) ||> H(_4, _1, _3) // H(d, a, c) — selective
 ```
+
+#### Examples — restructuring without a function
+
+Because `||>` substitutes placeholders in *any* right-side expression, it doubles as a compact restructuring / projection operator:
+
+```rix
+(1, 2, 3) ||> (_2, _1, _3)           // (2, 1, 3)  — reorder into a new tuple
+(1, 2, 3) ||> [_2, _1, _3]           // [2, 1, 3]  — reorder into an array
+(1, 2, 3) ||> {= a=_2, b=_1, c=_3}  // {= a=2, b=1, c=3 } — project into a record
+(x, y)    ||> (_1 + _2, _1 - _2)     // (x+y, x-y) — compute multiple results
+```
+
+No helper function needed — `||>` with a literal on the right is equivalent to an anonymous structural mapping.
 
 #### AST Structure
 ```javascript
 {
   type: "ExplicitPipe",
   left: { /* tuple operand */ },
-  right: { /* function with placeholders */ },
-  placeholders: ["_2", "_1"] // extracted placeholder names
+  right: { /* any expression containing PlaceHolder nodes */ }
 }
 ```
 

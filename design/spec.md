@@ -544,17 +544,23 @@ RiX provides three postfix operators with the highest precedence for precision c
 
 ## 7. Piping and Data Flow
 
-* **Simple pipe (**\`\`**):** Elixir-style; auto-feeds left as args (tuple unpacked):
+* **Simple pipe (`|>`):** Elixir-style; tuples are unpacked as positional args, all other values pass as-is:
 
-  * `(3, 4) |> f` is `f(3, 4)`
-* **Explicit pipe (**\`\`**):** Requires explicit mapping:
+  * `(3, 4) |> F` is `F(3, 4)` — tuple unpacked
+  * `5 |> F` is `F(5)` — scalar passed directly
+  * `[1, 2] |> F` is `F([1, 2])` — array is a single arg
+* **Explicit pipe (`||>`):** General IR-template substitution — substitutes placeholders in *any* right-side expression, then evaluates. The right side need not be a function call:
 
-  * `(3, 4) ||> f(_2, _1)` is `f(4, 3)`
-  * Can access earlier pipeline values as `__1`, etc.
+  * `(1, 2) ||> F(_2, _1)` is `F(2, 1)` — swapped args (contrast: `(1,2) |> F` is `F(1,2)`)
+  * `(5, 2) ||> F(_1, _1)` is `F(5, 5)` — duplicated first element
+  * `(1, 2, 3) ||> F(_3, _2, _1)` is `F(3, 2, 1)` — reversed
+  * `(1, 2, 3) ||> (_2, _1, _3)` is `(2, 1, 3)` — reorder into a new tuple
+  * `(1, 2, 3) ||> [_2, _1, _3]` is `[2, 1, 3]` — reorder into an array
+  * `(1, 2, 3) ||> {= a=_2, b=_1, c=_3}` is `{= a=2, b=1, c=3}` — project into a record
 * **Arrays vs Tuples:**
 
-  * `(a, b, c)` unpacks as multiple args
-  * `[a, b, c]` passes as a single arg
+  * `(a, b, c)` unpacks as multiple args under `|>` or provides indexed elements `_1`, `_2`, `_3` under `||>`
+  * `[a, b, c]` passes as a single arg in both `|>` and `||>`
 
 ---
 
