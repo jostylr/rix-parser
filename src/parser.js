@@ -704,6 +704,11 @@ class Parser {
           return this.createNode("NULL", {
             original: token.original,
           });
+        } else if (token.value === "$") {
+          this.advance();
+          return this.createNode("SelfRef", {
+            original: token.original,
+          });
         } else {
           this.error(`Unexpected token in prefix position: ${token.value}`);
         }

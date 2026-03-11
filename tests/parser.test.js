@@ -3652,4 +3652,55 @@ describe("RiX Parser", () => {
       });
     });
   });
+
+  describe('Self reference', () => {
+    test('bare $ parses as SelfRef', () => {
+      const ast = parseCode('$;');
+      expect(stripMetadata(ast)).toEqual([
+        {
+          type: 'Statement',
+          expression: { type: 'SelfRef' }
+        }
+      ]);
+    });
+
+    test('$(...) parses as a call on SelfRef', () => {
+      const ast = parseCode('f := x -> $(x - 1);');
+      expect(stripMetadata(ast)[0].expression.right.body).toEqual({
+        type: 'Call',
+        target: { type: 'SelfRef' },
+        arguments: {
+          positional: [
+            {
+              type: 'BinaryOperation',
+              operator: '-',
+              left: { type: 'UserIdentifier', name: 'x' },
+              right: { type: 'Number', value: '1' }
+            }
+          ],
+          keyword: {}
+        }
+      });
+    });
+
+    test('$.prop and $.. use the ordinary meta access nodes', () => {
+      const ast = parseCode('f := x -> ($.label, $..);');
+      const body = stripMetadata(ast)[0].expression.right.body;
+      expect(body).toEqual({
+        type: 'Tuple',
+        elements: [
+          {
+            type: 'DotAccess',
+            object: { type: 'SelfRef' },
+            property: 'label'
+          },
+          {
+            type: 'ExternalAccess',
+            object: { type: 'SelfRef' },
+            property: null
+          }
+        ]
+      });
+    });
+  });
 });

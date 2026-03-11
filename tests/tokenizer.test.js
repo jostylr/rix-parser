@@ -2358,4 +2358,22 @@ describe("Math Oracle Tokenizer", () => {
       expect(brace.containerName).toBe(null);
     });
   });
+
+  describe("Self reference", () => {
+    test("$ tokenizes as a symbol and composes with property/call syntax", () => {
+      const tokens = tokenize("$.label $(x) $..");
+      expect(tokens.map((token) => token.value)).toEqual([
+        "$",
+        ".",
+        "label",
+        "$",
+        "(",
+        "x",
+        ")",
+        "$",
+        "..",
+        null,
+      ]);
+    });
+  });
 });

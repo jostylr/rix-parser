@@ -40,6 +40,8 @@ A comprehensive tokenizer and parser for the RiX (Rational Interval Expression L
   - Comprehensive pipe operators (`|>`, `|>>`, `|>?`, `|>:`)
   - Array generators (`|+`, `|*`, `|:`, `|^`)
   - Pattern matching with metadata
+  - Function self-reference with `$`, `$(...)`, `$.prop`, and `$..`
+  - Tail-self-call optimization for direct tail `$(...)`
   - **Postfix operators (`@`, `?`, `()`, `~[...]`, `~{...}`) for precision, queries, universal calls, and units
   - Operator symbols as functions (`+(a,b,c)`, `*(x,y,z)`)
   - Ternary operator (`?? ?:`) for conditional expressions
@@ -69,6 +71,8 @@ result?(3.14:3.15)              // Check if result is in interval
 3(4)                            // Universal call: 3 * 4
 +(2, 3, 5)                      // Addition operator as function
 x > 0 ?? x ?: -x                // Ternary operator: condition ?? true ?: false
+CountDown := n -> n > 0 ?? $(n - 1) ?: 0
+Fact := (n, acc ?| 1) -> n > 1 ?? $(n - 1, acc * n) ?: acc
 ```
 
 ### Tokenization Features
@@ -86,6 +90,34 @@ x > 0 ?? x ?: -x                // Ternary operator: condition ?? true ?: false
 - **Extensibility:** Modular design for adding new operators and constructs
 - **Universal Function Calls:** Any expression can be called as a function
 - **Operator Functions:** Mathematical operators can be used as variadic functions
+
+### Function Self-Reference
+
+Inside a function body, bare `$` evaluates to the current callable object.
+
+```rix
+Named := x -> $.label
+Named.label = 42
+Named(0)        # => 42
+```
+
+- `$(args...)` calls the current callable.
+- `$.prop` and `$..` use the ordinary meta/property access rules on that callable.
+- `$` is invalid outside a function body.
+
+### Tail Self Calls
+
+RiX optimizes only direct self calls of the form `$(...)` when they are in tail position.
+
+```rix
+CountDown := n -> n > 0 ?? $(n - 1) ?: 0
+Fact := (n, acc ?| 1) -> n > 1 ?? $(n - 1, acc * n) ?: acc
+BadFact := n -> n > 1 ?? n * $(n - 1) ?: 1
+```
+
+- `CountDown` and accumulator-style `Fact` are optimized because the self call is returned directly.
+- `BadFact` is not optimized because multiplication still happens after the recursive call returns.
+- RiX does not implement general tail-call optimization or mutual tail recursion.
 
 ---
 

@@ -72,6 +72,23 @@ adjust := (x; offset := 0, scale := 1) -> x * scale + offset
 **Usage**: `parameter ? condition` or `value ? condition`
 **Context**: Parameters, patterns, and conditional expressions
 
+### 6. Self Reference and Tail Self Calls
+
+Inside a function body, bare `$` refers to the current callable object.
+
+**Examples**:
+```javascript
+CountDown(n) :-> n > 0 ?? $(n - 1) ?: 0
+Fact(n, acc ?| 1) :-> n > 1 ?? $(n - 1, acc * n) ?: acc
+Named(x) :-> $.label
+```
+
+**Rules**:
+- `$(...)` calls the current callable regardless of the outer binding name.
+- `$.prop` and `$..` use ordinary meta access on that callable.
+- `$` is read-only and invalid outside a function body.
+- Only direct tail `$(...)` calls are optimized; general or mutual tail calls are not.
+
 ## Technical Implementation
 
 ### Tokenizer Changes
@@ -119,7 +136,14 @@ adjust := (x; offset := 0, scale := 1) -> x * scale + offset
    }
    ```
 
-4. **ParameterList**:
+4. **SelfRef**:
+   ```javascript
+   {
+     type: 'SelfRef'
+   }
+   ```
+
+5. **ParameterList**:
    ```javascript
    {
      type: 'ParameterList',
@@ -148,6 +172,7 @@ Function calls now use structured arguments:
 - `parseFunctionCallArgs()`: Handles new function call argument structure
 - `parseParameterFromArg()`: Converts function call syntax to parameter definitions
 - `convertArgsToParams()`: Helper for parameter extraction
+- Self-reference parsing for bare `$`, `$(...)`, `$.prop`, and `$..`
 - Enhanced `parseGrouping()`: Detects and handles parameter list syntax
 - Enhanced `parseInfix()`: Handles new function definition operators
 
@@ -216,6 +241,7 @@ The implementation provides foundation for:
 
 The function definition system integrates with:
 - **Metadata system**: Parameters and functions support metadata annotations
+- **Self-reference**: Function bodies can access the current callable and its metadata through `$`
 - **System identifiers**: Function calls work with system function lookup
 - **Expression evaluation**: All expressions valid in function bodies and conditions
 - **Error handling**: Comprehensive error messages for invalid syntax
