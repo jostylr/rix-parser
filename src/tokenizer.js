@@ -81,6 +81,7 @@ const symbols = [
   "?=",
   "??",
   "?:",
+  "?|",
   // System function prefix (must come before single @)
   "@_",
   "|^:",

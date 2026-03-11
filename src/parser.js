@@ -184,6 +184,11 @@ const SYMBOL_TABLE = {
     associativity: "left",
     type: "infix",
   },
+  "?|": {
+    precedence: PRECEDENCE.LOGICAL_OR,
+    associativity: "left",
+    type: "infix",
+  },
 
   // Interval operators / ternary colon
   ":": {
@@ -969,7 +974,8 @@ class Parser {
           original: left.original + operator.original,
         });
       } else if (left.type === "Grouping" && left.expression) {
-        // Handle simple parameter cases like (x) -> expr or (x ? condition) -> expr
+        // Handle single-parameter cases: (x) -> expr, (x ? cond) -> expr,
+        // (x := default) -> expr, (x ?| holeDefault) -> expr
         let parameters = {
           positional: [],
           keyword: [],
@@ -977,21 +983,12 @@ class Parser {
           metadata: {},
         };
 
-        if (left.expression.type === "UserIdentifier") {
-          // Single parameter: (x) -> expr
-          parameters.positional.push({
-            name: left.expression.name,
-            defaultValue: null,
-          });
-        } else if (
-          left.expression.type === "BinaryOperation" &&
-          left.expression.operator === "?"
-        ) {
-          // Conditional parameter: (x ? condition) -> expr
-          const paramName =
-            left.expression.left.name || left.expression.left.value;
-          parameters.positional.push({ name: paramName, defaultValue: null });
-          parameters.conditionals.push(left.expression.right);
+        const result = this.parseParameterFromArg(left.expression, false);
+        if (result.param.name) {
+          parameters.positional.push(result.param);
+          if (result.condition) {
+            parameters.conditionals.push(result.condition);
+          }
         }
 
         return this.createNode("FunctionLambda", {
@@ -1010,11 +1007,12 @@ class Parser {
         };
 
         for (const element of left.elements) {
-          if (element.type === "UserIdentifier") {
-            parameters.positional.push({
-              name: element.name,
-              defaultValue: null,
-            });
+          const result = this.parseParameterFromArg(element, false);
+          if (result.param.name) {
+            parameters.positional.push(result.param);
+            if (result.condition) {
+              parameters.conditionals.push(result.condition);
+            }
           }
         }
 
@@ -1781,9 +1779,12 @@ class Parser {
           continue;
         }
 
-        // Parse element - check for generator chains
+        // Parse element - check for generator chains or empty slot (hole)
         let element;
-        if (this.isGeneratorOperator(this.current.value)) {
+        if (this.current.value === "," || this.current.value === "]") {
+          // Empty slot → hole (do not advance; separator is handled below)
+          element = this.createNode("Hole", { original: "" });
+        } else if (this.isGeneratorOperator(this.current.value)) {
           // Start with generator operator (no initial value)
           element = this.parseGeneratorChain();
         } else {
@@ -1837,6 +1838,13 @@ class Parser {
         // Check what comes next
         if (this.current.value === ",") {
           this.advance();
+          // Trailing hole: comma immediately followed by ']'
+          if (this.current.value === "]") {
+            const trailingHole = this.createNode("Hole", { original: "" });
+            elements.push(trailingHole);
+            currentRow.push(trailingHole);
+            nonMetadataCount++;
+          }
         } else if (
           this.current.value === ";" ||
           this.current.type === "SemicolonSequence"
@@ -2644,12 +2652,20 @@ class Parser {
           this.error("Expected identifier for keyword argument");
         }
       } else {
-        // Parse positional argument
-        args.positional.push(this.parseExpression(0));
+        // Parse positional argument — check for empty slot (hole)
+        if (this.current.value === "," || this.current.value === ")") {
+          args.positional.push(this.createNode("Hole", { original: "" }));
+        } else {
+          args.positional.push(this.parseExpression(0));
+        }
       }
 
       if (this.current.value === ",") {
         this.advance();
+        // Trailing hole: comma immediately followed by ')'
+        if (this.current.value === ")") {
+          args.positional.push(this.createNode("Hole", { original: "" }));
+        }
       } else if (this.current.value !== ")" && this.current.value !== ";") {
         break;
       }
@@ -2846,6 +2862,10 @@ class Parser {
       } else {
         result.param.defaultValue = arg.right;
       }
+    } else if (arg.type === "BinaryOperation" && arg.operator === "?|") {
+      // Hole-default: x ?| 2 — used only when arg is explicitly a hole
+      result.param.name = arg.left.name || arg.left.value;
+      result.param.holeDefault = arg.right;
     } else if (arg.type === "BinaryOperation" && arg.operator === "?") {
       // Parameter with condition: x ? condition
       result.param.name = arg.left.name || arg.left.value;
