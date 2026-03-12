@@ -371,8 +371,8 @@ describe("Phase 1 Parser", () => {
       expect(expr.elements[1].type).toBe("SystemCall");
     });
 
-    test("lowercase function def with = assignment and condition", () => {
-      const expr = stripMetadata(parseCode("h(x; n := 2 ? x > 0) :-> x + n;"))[0].expression;
+    test("lowercase function def with keyword param and condition", () => {
+      const expr = stripMetadata(parseCode("h(x; n ? x > 0) :-> x + n;"))[0].expression;
       expect(expr.type).toBe("FunctionDefinition");
       expect(expr.name.name).toBe("h");
       expect(expr.parameters.keyword.length).toBe(1);

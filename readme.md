@@ -52,7 +52,7 @@ A comprehensive tokenizer and parser for the RiX (Rational Interval Expression L
 
 ```plaintext
 x := 3                          // Assignment
-f := (x, n:=2) -> x^n + 1       // Function definition with optional parameter
+f := (x, n ?| 2) -> x^n + 1      // Function definition with optional parameter
 y := 1..3/4                     // Mixed number: one and three quarters
 z := 2:5                        // Interval from 2 to 5
 2:3 ^ 2                         // Interval elementwise exponentiation: 4:9
@@ -121,7 +121,7 @@ console.log(ast2);
 import { parse } from 'rix-language-parser';
 
 // Function definitions
-const funcDef = parse('power(x, n := 2) :-> x^n');
+const funcDef = parse('power(x, n ?| 2) :-> x^n');
 
 // Pattern matching
 const patternFunc = parse('abs :=> [(x ? x >= 0) -> x, (x ? x < 0) -> -x]');

@@ -12,15 +12,15 @@ This document summarizes the implementation of comprehensive function definition
 
 **Features**:
 - Positional parameters: `f(x, y)`
-- Default parameters: `f(x, n := 5)`
-- Keyword-only parameters: `f(x; a := 0)` (after semicolon)
-- Conditional parameters: `f(x; n := 2 ? condition)`
+- Hole-default parameters: `f(x, n ?| 5)` (default used when hole or omitted)
+- Keyword-only parameters: `f(x; a ?| 0)` (after semicolon)
+- Conditional parameters: `f(x; n ? condition)`
 
 **Examples**:
 ```javascript
 f(x) :-> x + 1
-power(x, n := 2) :-> x^n
-constrainedFunc(x, y; offset := 0 ? x > 0) :-> x + y + offset
+power(x, n ?| 2) :-> x^n
+constrainedFunc(x, y; offset ? x > 0) :-> x + y + offset
 ```
 
 ### 2. Pattern Matching Functions (`:=>` operator)
@@ -63,7 +63,7 @@ transform(x; scale := 2, offset := 5)
 **Examples**:
 ```javascript
 double := (x) -> 2 * x
-adjust := (x; offset := 0, scale := 1) -> x * scale + offset
+adjust := (x; offset ?| 0, scale ?| 1) -> x * scale + offset
 ```
 
 ### 5. Condition Operator (`?`)

@@ -88,8 +88,8 @@ describe("RiX Parser", () => {
       ]);
     });
 
-    test("function definition with default parameters", () => {
-      const ast = parseCode("f(x, n := 5) :-> x^n;");
+    test("function definition with hole-default parameters", () => {
+      const ast = parseCode("f(x, n ?| 5) :-> x^n;");
       expect(stripMetadata(ast)).toEqual([
         {
           type: "Statement",
@@ -99,7 +99,7 @@ describe("RiX Parser", () => {
             parameters: {
               positional: [
                 { name: "x", defaultValue: null },
-                { name: "n", defaultValue: { type: "Number", value: "5" } },
+                { name: "n", defaultValue: null, holeDefault: { type: "Number", value: "5" } },
               ],
               keyword: [],
               conditionals: [],
@@ -117,7 +117,7 @@ describe("RiX Parser", () => {
     });
 
     test("function definition with keyword-only parameters", () => {
-      const ast = parseCode("f(x, n := 5; a := 0) :-> (x-a)^n + 1;");
+      const ast = parseCode("f(x, n ?| 5; a ?| 0) :-> (x-a)^n + 1;");
       expect(stripMetadata(ast)).toEqual([
         {
           type: "Statement",
@@ -127,10 +127,10 @@ describe("RiX Parser", () => {
             parameters: {
               positional: [
                 { name: "x", defaultValue: null },
-                { name: "n", defaultValue: { type: "Number", value: "5" } },
+                { name: "n", defaultValue: null, holeDefault: { type: "Number", value: "5" } },
               ],
               keyword: [
-                { name: "a", defaultValue: { type: "Number", value: "0" } },
+                { name: "a", defaultValue: null, holeDefault: { type: "Number", value: "0" } },
               ],
               conditionals: [],
               metadata: {},
@@ -161,7 +161,7 @@ describe("RiX Parser", () => {
 
     test("function definition with condition", () => {
       const ast = parseCode(
-        "h(x, y; n := 2 ? x^2 + y^2 == 1) :-> COS(x; n) * SIN(y; n);",
+        "h(x, y; n ? x^2 + y^2 == 1) :-> COS(x; n) * SIN(y; n);",
       );
       expect(stripMetadata(ast)).toEqual([
         {
@@ -177,7 +177,7 @@ describe("RiX Parser", () => {
               keyword: [
                 {
                   name: "n",
-                  defaultValue: { type: "Number", value: "2" },
+                  defaultValue: null,
                 },
               ],
               conditionals: [
@@ -396,7 +396,7 @@ describe("RiX Parser", () => {
     });
 
     test("simple assignment-style function definition", () => {
-      const ast = parseCode("f := (x, n := 5; a := 0) -> (x-a)^n + 1;");
+      const ast = parseCode("f := (x, n ?| 5; a ?| 0) -> (x-a)^n + 1;");
       expect(stripMetadata(ast)).toEqual([
         {
           type: "Statement",
@@ -409,10 +409,10 @@ describe("RiX Parser", () => {
               parameters: {
                 positional: [
                   { name: "x", defaultValue: null },
-                  { name: "n", defaultValue: { type: "Number", value: "5" } },
+                  { name: "n", defaultValue: null, holeDefault: { type: "Number", value: "5" } },
                 ],
                 keyword: [
-                  { name: "a", defaultValue: { type: "Number", value: "0" } },
+                  { name: "a", defaultValue: null, holeDefault: { type: "Number", value: "0" } },
                 ],
                 conditionals: [],
                 metadata: {},

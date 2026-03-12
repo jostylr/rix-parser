@@ -980,7 +980,7 @@ class Parser {
         });
       } else if (left.type === "Grouping" && left.expression) {
         // Handle single-parameter cases: (x) -> expr, (x ? cond) -> expr,
-        // (x := default) -> expr, (x ?| holeDefault) -> expr
+        // (x ?| holeDefault) -> expr
         let parameters = {
           positional: [],
           keyword: [],
@@ -2597,15 +2597,10 @@ class Parser {
       this.error("Expected parameter name");
     }
 
-    // Check for default value
-    if (this.current.value === ":=") {
+    // Check for hole-default value: x ?| defaultExpr
+    if (this.current.value === "?|") {
       this.advance();
-      param.defaultValue = this.parseExpression(PRECEDENCE.CONDITION + 1);
-    }
-
-    // Keyword-only parameters must have default values
-    if (isKeywordOnly && param.defaultValue === null) {
-      this.error("Keyword-only parameters must have default values");
+      param.holeDefault = this.parseExpression(PRECEDENCE.CONDITION + 1);
     }
 
     return param;
@@ -2856,18 +2851,7 @@ class Parser {
       condition: null,
     };
 
-    if (arg.type === "BinaryOperation" && arg.operator === ":=") {
-      // Parameter with default value: x := 5 or x := 5 ? condition
-      result.param.name = arg.left.name || arg.left.value;
-
-      // Extract ? condition if it exists at the top level of the right side
-      if (arg.right.type === "BinaryOperation" && arg.right.operator === "?") {
-        result.param.defaultValue = arg.right.left;
-        result.condition = arg.right.right;
-      } else {
-        result.param.defaultValue = arg.right;
-      }
-    } else if (arg.type === "BinaryOperation" && arg.operator === "?|") {
+    if (arg.type === "BinaryOperation" && arg.operator === "?|") {
       // Hole-default: x ?| 2 — used only when arg is explicitly a hole
       result.param.name = arg.left.name || arg.left.value;
       result.param.holeDefault = arg.right;

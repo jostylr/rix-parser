@@ -168,7 +168,7 @@ describe("Functional Control Structures", () => {
       category: "control",
     });
 
-    const code = "WHILE(x^2 + y^2 < radius^2, (x := x + dx; y := y + dy))";
+    const code = "WHILE(x^2 + y^2 < radius^2, {; x := x + dx; y := y + dy })";
     const tokens = tokenize(code);
     const ast = parse(tokens, systemLoader.createParserLookup());
 
@@ -330,7 +330,7 @@ describe("Real-world functional control usage", () => {
 
     // Computing factorial using functional WHILE
     const code =
-      "n := 5; result := 1; i := 1; WHILE(i <= n, (result := result * i; i := i + 1))";
+      "n := 5; result := 1; i := 1; WHILE(i <= n, {; result := result * i; i := i + 1 })";
     const tokens = tokenize(code);
     const ast = parse(tokens, systemLoader.createParserLookup());
 
