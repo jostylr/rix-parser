@@ -423,6 +423,7 @@ const SYMBOL_TABLE = {
   "(": { precedence: 0, type: "grouping" },
   ")": { precedence: 0, type: "grouping" },
   "[": { precedence: PRECEDENCE.POSTFIX, type: "postfix" },
+  "^^": { precedence: PRECEDENCE.POSTFIX, type: "postfix" },
   "]": { precedence: 0, type: "grouping" },
   "{": { precedence: 0, type: "grouping" },
   "}": { precedence: 0, type: "grouping" },
@@ -797,15 +798,10 @@ class Parser {
         });
       }
 
-      // General expression index: obj[expr]
-      right = this.parseExpression(0);
-      if (this.current.value !== "]") {
-        this.error("Expected closing bracket");
-      }
-      this.advance();
-      return this.createNode("PropertyAccess", {
-        object: left,
-        property: right,
+      return this.parseBracketIndex(left, operator);
+    } else if (operator.value === "^^" && symbolInfo.type === "postfix") {
+      return this.createNode("Transpose", {
+        expression: left,
         pos: left.pos,
         original: left.original + operator.original,
       });
@@ -2058,6 +2054,10 @@ class Parser {
     const startToken = this.current;
     this.advance(); // consume the sigil token (e.g., '{=')
 
+    if (sigil === "{:" && containerName && /^\d+(?:x\d+)*$/.test(containerName)) {
+      return this.parseTensorLiteral(startToken, containerName);
+    }
+
     const sigilTypeMap = {
       "{=": "MapContainer",
       "{?": "CaseContainer",
@@ -2148,6 +2148,202 @@ class Parser {
       pos: startToken.pos,
       original: startToken.original,
     });
+  }
+
+  parseTensorLiteral(startToken, headerText) {
+    const shape = headerText.split("x").map((part) => {
+      const dim = Number(part);
+      if (!Number.isInteger(dim) || dim < 0) {
+        this.error(`Invalid tensor dimension '${part}'`);
+      }
+      return dim;
+    });
+
+    const size = shape.reduce((product, dim) => product * dim, 1);
+    let elements = [];
+
+    if (size === 0) {
+      if (this.current.value !== "}") {
+        this.error(
+          `Tensor literal shape ${shape.join("x")} has size 0 and must not contain elements`,
+        );
+      }
+    } else if (this.current.value !== "}") {
+      const displayTree = this.parseTensorDisplayLevel(this.getTensorDisplayLevels(shape), 0, shape);
+      elements = this.flattenTensorDisplayTree(displayTree, shape);
+    }
+
+    if (this.current.value !== "}") {
+      this.error("Expected closing brace for tensor literal");
+    }
+    this.advance();
+
+    return this.createNode("TensorLiteral", {
+      shape,
+      elements,
+      pos: startToken.pos,
+      original: startToken.original,
+    });
+  }
+
+  getTensorDisplayLevels(shape) {
+    if (shape.length === 0) {
+      return [];
+    }
+    if (shape.length === 1) {
+      return [{ size: shape[0], separatorCount: 0, label: "entry" }];
+    }
+
+    const levels = [];
+    for (let axis = shape.length - 1; axis >= 2; axis--) {
+      levels.push({
+        size: shape[axis],
+        separatorCount: axis,
+        label: `axis ${axis + 1}`,
+      });
+    }
+    levels.push({ size: shape[0], separatorCount: 1, label: "row" });
+    levels.push({ size: shape[1], separatorCount: 0, label: "column" });
+    return levels;
+  }
+
+  parseTensorDisplayLevel(levels, levelIndex, shape) {
+    const level = levels[levelIndex];
+    if (!level) {
+      return null;
+    }
+
+    if (level.separatorCount === 0) {
+      const values = [];
+      for (let i = 0; i < level.size; i++) {
+        values.push(this.parseExpression(0));
+        if (i < level.size - 1) {
+          if (this.current.value !== ",") {
+            this.error(
+              `Tensor literal shape ${shape.join("x")} expects ${level.size} columns per row`,
+            );
+          }
+          this.advance();
+        }
+      }
+      return values;
+    }
+
+    const groups = [];
+    for (let i = 0; i < level.size; i++) {
+      groups.push(this.parseTensorDisplayLevel(levels, levelIndex + 1, shape));
+      if (i < level.size - 1) {
+        const consumed = this.consumeSemicolonSequence();
+        if (consumed !== level.separatorCount) {
+          const sepText = ";".repeat(level.separatorCount);
+          this.error(
+            `Tensor literal shape ${shape.join("x")} expects '${sepText}' between ${level.label}s`,
+          );
+        }
+      }
+    }
+    return groups;
+  }
+
+  flattenTensorDisplayTree(tree, shape) {
+    if (shape.length === 1) {
+      return tree;
+    }
+
+    const elements = [];
+    const path = [];
+
+    const getValueAtDisplayPath = (displayPath) => {
+      let node = tree;
+      for (const idx of displayPath) {
+        node = node[idx - 1];
+      }
+      return node;
+    };
+
+    const visitExternal = (axis) => {
+      if (axis === shape.length) {
+        const higher = path.slice(2).reverse();
+        const displayPath = [...higher, path[0], path[1]];
+        elements.push(getValueAtDisplayPath(displayPath));
+        return;
+      }
+
+      for (let i = 1; i <= shape[axis]; i++) {
+        path.push(i);
+        visitExternal(axis + 1);
+        path.pop();
+      }
+    };
+
+    visitExternal(0);
+    return elements;
+  }
+
+  parseBracketIndex(left, operator) {
+    const specs = [];
+
+    if (this.current.value !== "]") {
+      do {
+        specs.push(this.parseBracketSpec());
+        if (this.current.value === ",") {
+          this.advance();
+          if (this.current.value === "]") {
+            this.error("Trailing comma is not allowed in bracket indexing");
+          }
+          continue;
+        }
+        break;
+      } while (this.current.type !== "End");
+    }
+
+    if (this.current.value !== "]") {
+      this.error("Expected closing bracket");
+    }
+    this.advance();
+
+    if (
+      specs.length === 1 &&
+      specs[0].type !== "SliceSpec" &&
+      specs[0].type !== "FullSlice"
+    ) {
+      return this.createNode("PropertyAccess", {
+        object: left,
+        property: specs[0],
+        pos: left.pos,
+        original: left.original + operator.original,
+      });
+    }
+
+    return this.createNode("BracketIndex", {
+      object: left,
+      specs,
+      pos: left.pos,
+      original: left.original + operator.original,
+    });
+  }
+
+  parseBracketSpec() {
+    const token = this.current;
+    if (token.value === "::") {
+      this.advance();
+      return this.createNode("FullSlice", {
+        pos: token.pos,
+        original: token.original,
+      });
+    }
+
+    const expr = this.parseExpression(0);
+    if (expr && expr.type === "BinaryOperation" && expr.operator === ":") {
+      return this.createNode("SliceSpec", {
+        start: expr.left,
+        end: expr.right,
+        pos: expr.pos,
+        original: expr.original,
+      });
+    }
+
+    return expr;
   }
 
   startsImportHeader() {

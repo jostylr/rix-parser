@@ -61,6 +61,7 @@ const symbols = [
   "*=",
   "/=",
   "%=",
+  "^^",
   "^=",
   "<=",
   ">=",
@@ -855,10 +856,10 @@ function tryMatchBrace(input, position) {
       const closingSigilPos = position + 2 + nameLen;
       if (input[closingSigilPos] === sigil) {
         const afterName = input[closingSigilPos + 1];
-        if (!isWhitespace(afterName)) {
+        if (!isWhitespace(afterName) && afterName !== "}") {
           const { line, col } = posToLineCol(input, position);
           throw new Error(
-            `Named container '{${sigil}${name}${sigil}' must be followed by a space at line ${line}:${col}`
+            `Named container '{${sigil}${name}${sigil}' must be followed by a space or '}' at line ${line}:${col}`
           );
         }
         const tokenLen = 1 + 1 + nameLen + 1; // { sigil name closingSigil

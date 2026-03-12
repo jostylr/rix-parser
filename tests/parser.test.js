@@ -1012,6 +1012,120 @@ describe("RiX Parser", () => {
       ]);
     });
 
+    test("tensor literal with explicit shape header", () => {
+      const ast = parseCode("{:2x3: a, b, c; d, e, f };");
+      expect(stripMetadata(ast)).toEqual([
+        {
+          type: "Statement",
+          expression: {
+            type: "TensorLiteral",
+            shape: [2, 3],
+            elements: [
+              { type: "UserIdentifier", name: "a" },
+              { type: "UserIdentifier", name: "b" },
+              { type: "UserIdentifier", name: "c" },
+              { type: "UserIdentifier", name: "d" },
+              { type: "UserIdentifier", name: "e" },
+              { type: "UserIdentifier", name: "f" },
+            ],
+          },
+        },
+      ]);
+    });
+
+    test("rank-3 tensor literal with explicit shape header uses rows then columns within each depth slice", () => {
+      const ast = parseCode("{:2x3x2: a, b, c; d, e, f ;; g, h, i; j, k, l };");
+      expect(stripMetadata(ast)).toEqual([
+        {
+          type: "Statement",
+          expression: {
+            type: "TensorLiteral",
+            shape: [2, 3, 2],
+            elements: [
+              { type: "UserIdentifier", name: "a" },
+              { type: "UserIdentifier", name: "g" },
+              { type: "UserIdentifier", name: "b" },
+              { type: "UserIdentifier", name: "h" },
+              { type: "UserIdentifier", name: "c" },
+              { type: "UserIdentifier", name: "i" },
+              { type: "UserIdentifier", name: "d" },
+              { type: "UserIdentifier", name: "j" },
+              { type: "UserIdentifier", name: "e" },
+              { type: "UserIdentifier", name: "k" },
+              { type: "UserIdentifier", name: "f" },
+              { type: "UserIdentifier", name: "l" },
+            ],
+          },
+        },
+      ]);
+    });
+
+    test("rank-3 tensor literal rejects a 3x2 body under a 2x3x2 shape", () => {
+      expect(() => parseCode("{:2x3x2: a, b; c, d; e, f ;; g, h; i, j; k, l };"))
+        .toThrow("expects 3 columns per row");
+    });
+
+    test("empty tensor literal with explicit shape header", () => {
+      const ast = parseCode("{:2x3:};");
+      expect(stripMetadata(ast)).toEqual([
+        {
+          type: "Statement",
+          expression: {
+            type: "TensorLiteral",
+            shape: [2, 3],
+            elements: [],
+          },
+        },
+      ]);
+    });
+
+    test("tensor bracket indexing with slices", () => {
+      const ast = parseCode("m[1, ::];");
+      expect(stripMetadata(ast)).toEqual([
+        {
+          type: "Statement",
+          expression: {
+            type: "BracketIndex",
+            object: { type: "UserIdentifier", name: "m" },
+            specs: [
+              { type: "Number", value: "1" },
+              { type: "FullSlice" },
+            ],
+          },
+        },
+      ]);
+    });
+
+    test("tensor bracket indexing preserves interval slices", () => {
+      const ast = parseCode("m[-1:1, 2];");
+      expect(stripMetadata(ast)).toEqual([
+        {
+          type: "Statement",
+          expression: {
+            type: "BracketIndex",
+            object: { type: "UserIdentifier", name: "m" },
+            specs: [
+              { type: "Number", value: "-1:1" },
+              { type: "Number", value: "2" },
+            ],
+          },
+        },
+      ]);
+    });
+
+    test("matrix transpose postfix", () => {
+      const ast = parseCode("m^^;");
+      expect(stripMetadata(ast)).toEqual([
+        {
+          type: "Statement",
+          expression: {
+            type: "Transpose",
+            expression: { type: "UserIdentifier", name: "m" },
+          },
+        },
+      ]);
+    });
+
     test("matrix with expressions", () => {
       const ast = parseCode("[a + b, x * y; 1/2, 3^4];");
       expect(stripMetadata(ast)).toEqual([

@@ -2357,6 +2357,19 @@ describe("Math Oracle Tokenizer", () => {
       expect(brace).toBeDefined();
       expect(brace.containerName).toBe(null);
     });
+
+    test("{:2x3:} produces a named {: token and allows immediate close", () => {
+      const tokens = tokenize("{:2x3:}");
+      const brace = tokens.find((t) => t.value === "{:");
+      expect(brace).toBeDefined();
+      expect(brace.containerName).toBe("2x3");
+      expect(tokens.map((t) => t.value)).toEqual(["{:", "}", null]);
+    });
+
+    test("^^ tokenizes as a single postfix symbol", () => {
+      const tokens = tokenize("m^^");
+      expect(tokens.map((t) => t.value)).toEqual(["m", "^^", null]);
+    });
   });
 
   describe("Self reference", () => {
