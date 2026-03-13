@@ -2345,6 +2345,46 @@ describe("Math Oracle Tokenizer", () => {
       expect(brace.containerName).toBe("loop");
     });
 
+    test("{@:100@ stores an explicit loop max", () => {
+      const tokens = tokenize("{@:100@ body }");
+      const brace = tokens.find((t) => t.value === "{@");
+      expect(brace).toBeDefined();
+      expect(brace.containerName).toBe(null);
+      expect(brace.loopMax).toBe(100);
+      expect(brace.loopUnlimited).toBeUndefined();
+    });
+
+    test("{@cool:100@ stores loop name and max", () => {
+      const tokens = tokenize("{@cool:100@ body }");
+      const brace = tokens.find((t) => t.value === "{@");
+      expect(brace).toBeDefined();
+      expect(brace.containerName).toBe("cool");
+      expect(brace.loopMax).toBe(100);
+    });
+
+    test("{@::@ stores unlimited loop metadata", () => {
+      const tokens = tokenize("{@::@ body }");
+      const brace = tokens.find((t) => t.value === "{@");
+      expect(brace).toBeDefined();
+      expect(brace.containerName).toBe(null);
+      expect(brace.loopUnlimited).toBe(true);
+      expect(brace.loopMax).toBeUndefined();
+    });
+
+    test("{@cool::@ stores named unlimited loop metadata", () => {
+      const tokens = tokenize("{@cool::@ body }");
+      const brace = tokens.find((t) => t.value === "{@");
+      expect(brace).toBeDefined();
+      expect(brace.containerName).toBe("cool");
+      expect(brace.loopUnlimited).toBe(true);
+    });
+
+    test("malformed loop header max is rejected", () => {
+      expect(() => tokenize("{@:abc@ body }")).toThrow(/Loop max must be a nonnegative integer literal/);
+      expect(() => tokenize("{@cool:@ body }")).toThrow(/Loop max must be a nonnegative integer literal/);
+      expect(() => tokenize("{@cool::100@ body }")).toThrow(/Unlimited loop header must end/);
+    });
+
     test("{|| with space produces {|| operator-brace token (not sigil)", () => {
       const tokens = tokenize("{|| 1, 2}");
       const brace = tokens.find((t) => t.value === "{||");

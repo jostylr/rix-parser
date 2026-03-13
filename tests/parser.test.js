@@ -1468,6 +1468,44 @@ describe("RiX Parser", () => {
     });
   });
 
+  describe("Loop Headers And Break Blocks", () => {
+    test("loop header with explicit max stores maxIterations", () => {
+      const expr = stripMetadata(parseCode("{@:100@ i := 0; i < 1; i; i += 1 };"))[0].expression;
+      expect(expr.type).toBe("LoopContainer");
+      expect(expr.maxIterations).toBe(100);
+      expect(expr.unlimited).toBeUndefined();
+    });
+
+    test("named unlimited loop stores name and unlimited flag", () => {
+      const expr = stripMetadata(parseCode("{@cool::@ i := 0; i < 1; i; i += 1 };"))[0].expression;
+      expect(expr.type).toBe("LoopContainer");
+      expect(expr.name).toBe("cool");
+      expect(expr.unlimited).toBe(true);
+      expect(expr.maxIterations).toBeUndefined();
+    });
+
+    test("break block parses with optional target type and name", () => {
+      const generic = stripMetadata(parseCode("{! 5 };"))[0].expression;
+      expect(generic).toEqual({
+        type: "BreakBlock",
+        value: { type: "Number", value: "5" },
+      });
+
+      const typedNamed = stripMetadata(parseCode("{!@outer! x + 1 };"))[0].expression;
+      expect(typedNamed).toEqual({
+        type: "BreakBlock",
+        targetType: "loop",
+        targetName: "outer",
+        value: {
+          type: "BinaryOperation",
+          operator: "+",
+          left: { type: "UserIdentifier", name: "x" },
+          right: { type: "Number", value: "1" },
+        },
+      });
+    });
+  });
+
   // Test postfix operators
   describe('Postfix operators', () => {
     describe('AT operator (@)', () => {

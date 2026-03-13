@@ -622,7 +622,10 @@ class Parser {
         } else if (token.value === "{") {
           return this.parseBraceContainer();
         } else if (token.value === "{=" || token.value === "{?" || token.value === "{;" || token.value === "{|" || token.value === "{:" || token.value === "{@" || token.value === "{$") {
-          return this.parseBraceSigil(token.value, token.containerName ?? null);
+          return this.parseBraceSigil(token.value, token.containerName ?? null, {
+            loopMax: token.loopMax,
+            loopUnlimited: token.loopUnlimited === true,
+          });
         } else if (
           token.value === "{+" ||
           token.value === "{*" ||
@@ -636,7 +639,7 @@ class Parser {
         ) {
           return this.parseOperatorBrace(token.value);
         } else if (token.value === "{!") {
-          return this.parseBraceSigil(token.value, null);
+          return this.parseBreakBlock();
         } else if (token.value === "@") {
           // @ followed by { or brace sigil = deferred block: @{; ...}, @{? ...}, @{...}
           this.advance(); // consume '@'
@@ -646,7 +649,10 @@ class Parser {
             if (nextVal === "{") {
               inner = this.parseBraceContainer();
             } else {
-              inner = this.parseBraceSigil(nextVal, this.current.containerName ?? null);
+              inner = this.parseBraceSigil(nextVal, this.current.containerName ?? null, {
+                loopMax: this.current.loopMax,
+                loopUnlimited: this.current.loopUnlimited === true,
+              });
             }
             return this.createNode("DeferredBlock", {
               body: inner,
@@ -2050,7 +2056,7 @@ class Parser {
   }
 
   // Parse brace sigil containers: {= map, {? case, {; block, {| set, {: tuple, {@ loop
-  parseBraceSigil(sigil, containerName = null) {
+  parseBraceSigil(sigil, containerName = null, options = {}) {
     const startToken = this.current;
     this.advance(); // consume the sigil token (e.g., '{=')
 
@@ -2143,8 +2149,68 @@ class Parser {
     return this.createNode(nodeType, {
       sigil: sigil,
       ...(containerName ? { name: containerName } : {}),
+      ...(sigil === "{@" && options.loopMax !== undefined ? { maxIterations: options.loopMax } : {}),
+      ...(sigil === "{@" && options.loopUnlimited ? { unlimited: true } : {}),
       ...(imports.length > 0 ? { imports: imports } : {}),
       elements: elements,
+      pos: startToken.pos,
+      original: startToken.original,
+    });
+  }
+
+  parseBreakBlock() {
+    const startToken = this.current;
+    this.advance(); // consume '{!'
+
+    let targetType = null;
+    if (this.current.value === ";") {
+      targetType = "block";
+      this.advance();
+    } else if (this.current.value === "@") {
+      targetType = "loop";
+      this.advance();
+    } else if (this.current.value === "?") {
+      targetType = "case";
+      this.advance();
+    } else if (this.current.type === "OuterIdentifier" && this.peek().value === "!") {
+      targetType = "loop";
+      const targetName = this.current.value.toLowerCase();
+      this.advance();
+      this.advance(); // consume trailing '!' after the target name
+      const value = this.parseExpression(0);
+
+      if (this.current.value !== "}") {
+        this.error("Expected closing } for break block");
+      }
+      this.advance();
+
+      return this.createNode("BreakBlock", {
+        targetType,
+        targetName,
+        value,
+        pos: startToken.pos,
+        original: startToken.original,
+      });
+    }
+
+    let targetName = null;
+    if (this.current.type === "Identifier" && this.peek().value === "!") {
+      targetName = this.current.value.toLowerCase();
+      this.advance();
+      this.advance(); // consume trailing '!' after the target name
+    }
+
+    const value = this.parseExpression(0);
+
+    if (this.current.value !== "}") {
+      this.error("Expected closing } for break block");
+    }
+    this.advance();
+
+    return this.createNode("BreakBlock", {
+      ...(targetType ? { targetType } : {}),
+      ...(targetName ? { targetName } : {}),
+      value,
       pos: startToken.pos,
       original: startToken.original,
     });

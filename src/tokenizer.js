@@ -843,6 +843,13 @@ function tryMatchBrace(input, position) {
       };
     }
 
+    if (sigil === "@") {
+      const loopHeader = tryMatchLoopHeader(input, position);
+      if (loopHeader) {
+        return loopHeader;
+      }
+    }
+
     // 2b. Name-between-sigils → named container: {sigil name sigil}
     if (after !== undefined && /[a-zA-Z0-9_]/.test(after)) {
       let nameLen = 0;
@@ -908,6 +915,105 @@ function tryMatchBrace(input, position) {
   throw new Error(
     `'{' must be followed by a space, a sigil (@;|:=?$), or an operator (+, *, &&, ||, \\/, /\\, ++, <<, >>) at line ${line}:${col}`
   );
+}
+
+function tryMatchLoopHeader(input, position) {
+  const start = position + 2; // after "{@"
+  let cursor = start;
+
+  let containerName = null;
+  let loopMax;
+  let unlimited = false;
+
+  if (input[cursor] === ":") {
+    cursor++;
+  } else if (/[a-zA-Z0-9_]/.test(input[cursor] || "")) {
+    const nameStart = cursor;
+    while (cursor < input.length && /[a-zA-Z0-9_]/.test(input[cursor])) {
+      cursor++;
+    }
+    containerName = input.slice(nameStart, cursor).toLowerCase();
+    if (input[cursor] === "@") {
+      return finalizeLoopHeader(input, position, cursor + 1, {
+        containerName,
+        loopMax: undefined,
+        unlimited: false,
+      });
+    }
+    if (input[cursor] !== ":") {
+      const { line, col } = posToLineCol(input, position);
+      throw new Error(
+        `Brace sigil '{@' must be followed by a space or a valid loop header ('{@name@', '{@:max@', '{@name:max@', '{@::@', '{@name::@') at line ${line}:${col}`
+      );
+    }
+    cursor++;
+  } else {
+    return null;
+  }
+
+  if (input[cursor] === ":") {
+    unlimited = true;
+    cursor++;
+    if (input[cursor] !== "@") {
+      const { line, col } = posToLineCol(input, position);
+      throw new Error(
+        `Unlimited loop header must end with '{@::@' or '{@name::@' at line ${line}:${col}`
+      );
+    }
+    return finalizeLoopHeader(input, position, cursor + 1, {
+      containerName,
+      loopMax: undefined,
+      unlimited,
+    });
+  }
+
+  const digitsStart = cursor;
+  while (cursor < input.length && /[0-9]/.test(input[cursor])) {
+    cursor++;
+  }
+
+  if (digitsStart === cursor) {
+    const { line, col } = posToLineCol(input, position);
+    throw new Error(`Loop max must be a nonnegative integer literal at line ${line}:${col}`);
+  }
+
+  if (input[cursor] !== "@") {
+    const { line, col } = posToLineCol(input, position);
+    throw new Error(`Loop header max must end with '@' at line ${line}:${col}`);
+  }
+
+  const rawMax = input.slice(digitsStart, cursor);
+  const parsedMax = Number(rawMax);
+  if (!Number.isSafeInteger(parsedMax) || parsedMax < 0) {
+    const { line, col } = posToLineCol(input, position);
+    throw new Error(`Invalid loop max '${rawMax}' at line ${line}:${col}`);
+  }
+
+  return finalizeLoopHeader(input, position, cursor + 1, {
+    containerName,
+    loopMax: parsedMax,
+    unlimited: false,
+  });
+}
+
+function finalizeLoopHeader(input, position, end, options) {
+  const after = input[end];
+  if (!(after === "}" || after === undefined || after === " " || after === "\t" || after === "\n" || after === "\r")) {
+    const { line, col } = posToLineCol(input, position);
+    throw new Error(
+      `Loop header must be followed by a space or '}' at line ${line}:${col}`
+    );
+  }
+
+  return {
+    type: "Symbol",
+    original: input.slice(position, end),
+    value: "{@",
+    containerName: options.containerName ?? null,
+    ...(options.loopMax !== undefined ? { loopMax: options.loopMax } : {}),
+    ...(options.unlimited ? { loopUnlimited: true } : {}),
+    pos: [position, position, end],
+  };
 }
 
 function tryMatchSymbol(input, position) {
