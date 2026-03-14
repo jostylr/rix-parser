@@ -435,6 +435,7 @@ const SYMBOL_TABLE = {
   "{|": { precedence: 0, type: "brace_sigil" },
   "{:": { precedence: 0, type: "brace_sigil" },
   "{@": { precedence: 0, type: "brace_sigil" },
+  "{#": { precedence: 0, type: "brace_sigil" },
   "{$": { precedence: 0, type: "brace_sigil" },
 
   // Mutation brace
@@ -621,7 +622,11 @@ class Parser {
           return this.parseArray();
         } else if (token.value === "{") {
           return this.parseBraceContainer();
-        } else if (token.value === "{=" || token.value === "{?" || token.value === "{;" || token.value === "{|" || token.value === "{:" || token.value === "{@" || token.value === "{$") {
+        } else if (token.value === "{=" || token.value === "{?" || token.value === "{;" || token.value === "{|" || token.value === "{:" || token.value === "{@" || token.value === "{#"
+          || token.value === "{$") {
+          if (token.value === "{#") {
+            return this.parseSystemSpecLiteral();
+          }
           return this.parseBraceSigil(token.value, token.containerName ?? null, {
             loopMax: token.loopMax,
             loopUnlimited: token.loopUnlimited === true,
@@ -644,10 +649,12 @@ class Parser {
           // @ followed by { or brace sigil = deferred block: @{; ...}, @{? ...}, @{...}
           this.advance(); // consume '@'
           const nextVal = this.current.value;
-          if (nextVal === "{" || nextVal === "{;" || nextVal === "{?" || nextVal === "{=" || nextVal === "{|" || nextVal === "{:" || nextVal === "{@" || nextVal === "{$") {
+          if (nextVal === "{" || nextVal === "{;" || nextVal === "{?" || nextVal === "{=" || nextVal === "{|" || nextVal === "{:" || nextVal === "{@" || nextVal === "{#" || nextVal === "{$") {
             let inner;
             if (nextVal === "{") {
               inner = this.parseBraceContainer();
+            } else if (nextVal === "{#") {
+              inner = this.parseSystemSpecLiteral();
             } else {
               inner = this.parseBraceSigil(nextVal, this.current.containerName ?? null, {
                 loopMax: this.current.loopMax,
@@ -2071,7 +2078,7 @@ class Parser {
       "{|": "SetContainer",
       "{:": "TupleContainer",
       "{@": "LoopContainer",
-      "{$": "SystemContainer",
+      "{$": "BlockContainer",
     };
 
     const nodeType = sigilTypeMap[sigil];
@@ -2156,6 +2163,137 @@ class Parser {
       pos: startToken.pos,
       original: startToken.original,
     });
+  }
+
+  parseSystemSpecLiteral() {
+    const startToken = this.current;
+    const header = {
+      inputs: [...(startToken.specInputs || [])],
+      outputs: [...(startToken.specOutputs || [])],
+      outputsDeclared: startToken.specOutputsDeclared === true,
+    };
+
+    this.validateSystemSpecHeader(header);
+    this.advance(); // consume "{#"
+
+    const imports = this.startsImportHeader() ? this.parseImportHeader() : [];
+    const statements = [];
+
+    if (this.current.value !== "}") {
+      do {
+        if (this.current.value === ";") {
+          this.advance();
+          continue;
+        }
+
+        const expression = this.parseExpression(0);
+        statements.push(this.parseSystemSpecStatement(expression));
+
+        if (this.current.value === ";") {
+          this.advance();
+          if (this.current.value === "}") break;
+        } else if (this.current.value === ",") {
+          this.advance();
+          if (this.current.value === "}") break;
+        } else if (this.current.value === "}") {
+          break;
+        } else if (this.current.type === "End") {
+          this.error("Expected closing } for system spec literal");
+        } else {
+          break;
+        }
+      } while (this.current.value !== "}" && this.current.type !== "End");
+    }
+
+    if (this.current.value !== "}") {
+      this.error("Expected closing } for system spec literal");
+    }
+    this.advance();
+
+    const finalized = this.finalizeSystemSpecStatements(header, statements);
+    return this.createNode("SystemSpecLiteral", {
+      sigil: "{#",
+      ...(imports.length > 0 ? { imports } : {}),
+      inputs: header.inputs,
+      outputs: finalized.outputs,
+      outputsDeclared: header.outputsDeclared,
+      statements: finalized.statements,
+      pos: startToken.pos,
+      original: startToken.original,
+    });
+  }
+
+  validateSystemSpecHeader(header) {
+    const checkDuplicates = (names, label) => {
+      const seen = new Set();
+      for (const name of names) {
+        if (seen.has(name)) {
+          this.error(`Duplicate ${label} '${name}' in system spec header`);
+        }
+        seen.add(name);
+      }
+    };
+
+    checkDuplicates(header.inputs, "input");
+    checkDuplicates(header.outputs, "output");
+
+    const inputs = new Set(header.inputs);
+    for (const name of header.outputs) {
+      if (inputs.has(name)) {
+        this.error(`System spec header name '${name}' cannot be both an input and an output`);
+      }
+    }
+  }
+
+  parseSystemSpecStatement(expression) {
+    if (!expression || expression.type !== "BinaryOperation" || expression.operator !== "=") {
+      this.error("System spec bodies only support symbolic assignments of the form name = expr");
+    }
+
+    const target = expression.left;
+    if (target.type !== "UserIdentifier" && target.type !== "SystemIdentifier") {
+      this.error("System spec assignment targets must be bare identifiers");
+    }
+
+    return this.createNode("SpecAssign", {
+      target: target.name,
+      expr: expression.right,
+      pos: expression.pos ?? target.pos,
+      original: expression.original,
+    });
+  }
+
+  finalizeSystemSpecStatements(header, statements) {
+    const assigned = new Set();
+    const inferredOutputs = [];
+    const declaredOutputs = new Set(header.outputs);
+
+    for (const statement of statements) {
+      const target = statement.target;
+      if (assigned.has(target)) {
+        this.error(`System spec output '${target}' is assigned more than once`);
+      }
+      if (header.outputsDeclared && !declaredOutputs.has(target)) {
+        this.error(`System spec assignment target '${target}' is not a declared output`);
+      }
+      assigned.add(target);
+      if (!header.outputsDeclared) {
+        inferredOutputs.push(target);
+      }
+    }
+
+    if (header.outputsDeclared) {
+      for (const output of header.outputs) {
+        if (!assigned.has(output)) {
+          this.error(`System spec declared output '${output}' is never assigned`);
+        }
+      }
+    }
+
+    return {
+      outputs: header.outputsDeclared ? header.outputs : inferredOutputs,
+      statements,
+    };
   }
 
   parseBreakBlock() {

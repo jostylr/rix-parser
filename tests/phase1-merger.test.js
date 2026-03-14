@@ -113,6 +113,11 @@ describe("Phase 1 Tokenizer", () => {
       expect(tokens[0].value).toBe("{@");
     });
 
+    test("{# tokenized as single symbol", () => {
+      const tokens = tokenize("{# p = x + 1 }");
+      expect(tokens[0].value).toBe("{#");
+    });
+
     test("plain { still works", () => {
       const tokens = tokenize("{ a }");
       expect(tokens[0].value).toBe("{");

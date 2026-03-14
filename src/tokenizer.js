@@ -775,6 +775,19 @@ function tryMatchIdentifier(input, position) {
   };
 }
 
+function normalizeIdentifierValue(original) {
+  let firstLetter = null;
+  for (let i = 0; i < original.length; i++) {
+    if (/[\p{L}]/u.test(original[i])) {
+      firstLetter = original[i];
+      break;
+    }
+  }
+
+  const isCapital = firstLetter !== null && firstLetter.toUpperCase() === firstLetter;
+  return isCapital ? original.toUpperCase() : original.toLowerCase();
+}
+
 function tryMatchSemicolonSequence(input, position) {
   const remaining = input.slice(position);
 
@@ -827,10 +840,17 @@ function tryMatchBrace(input, position) {
   }
 
   // 2. Sigil container detection
-  const sigilChars = new Set(["@", ";", "|", ":", "=", "?", "$"]);
+  const sigilChars = new Set(["@", ";", "|", ":", "=", "?", "$", "#"]);
   if (sigilChars.has(ch)) {
     const sigil = ch;
     const after = input[position + 2];
+
+    if (sigil === "#") {
+      const specHeader = tryMatchSystemSpecHeader(input, position);
+      if (specHeader) {
+        return specHeader;
+      }
+    }
 
     // 2a. Space immediately → anonymous container
     if (isWhitespace(after)) {
@@ -913,8 +933,78 @@ function tryMatchBrace(input, position) {
   // 5. All other cases: error (missing space after {)
   const { line, col } = posToLineCol(input, position);
   throw new Error(
-    `'{' must be followed by a space, a sigil (@;|:=?$), or an operator (+, *, &&, ||, \\/, /\\, ++, <<, >>) at line ${line}:${col}`
+    `'{' must be followed by a space, a sigil (@;|:=?$#), or an operator (+, *, &&, ||, \\/, /\\, ++, <<, >>) at line ${line}:${col}`
   );
+}
+
+function tryMatchSystemSpecHeader(input, position) {
+  const start = position + 2; // after "{#"
+  const first = input[start];
+
+  if (first === "}" || first === undefined || first === " " || first === "\t" || first === "\n" || first === "\r") {
+    return {
+      type: "Symbol",
+      original: "{#",
+      value: "{#",
+      specHeaderPresent: false,
+      specInputs: [],
+      specOutputs: [],
+      specOutputsDeclared: false,
+      pos: [position, position, position + 2],
+    };
+  }
+
+  const closing = input.indexOf("#", start);
+  if (closing === -1) {
+    const { line, col } = posToLineCol(input, position);
+    throw new Error(`System spec header must end with '#' at line ${line}:${col}`);
+  }
+
+  const after = input[closing + 1];
+  if (!(after === "}" || after === undefined || after === " " || after === "\t" || after === "\n" || after === "\r")) {
+    const { line, col } = posToLineCol(input, position);
+    throw new Error(`System spec header must be followed by a space or '}' at line ${line}:${col}`);
+  }
+
+  const rawHeader = input.slice(start, closing);
+  const colonCount = (rawHeader.match(/:/g) || []).length;
+  if (colonCount > 1) {
+    const { line, col } = posToLineCol(input, position);
+    throw new Error(`Malformed system spec header '${rawHeader}' at line ${line}:${col}`);
+  }
+
+  const parseHeaderList = (text, label) => {
+    const trimmed = text.trim();
+    if (!trimmed) return [];
+    return trimmed.split(",").map((piece) => {
+      const name = piece.trim();
+      if (!name) {
+        const { line, col } = posToLineCol(input, position);
+        throw new Error(`Malformed ${label} list in system spec header at line ${line}:${col}`);
+      }
+      if (!/^[\p{L}_][\p{L}\p{N}_]*$/u.test(name)) {
+        const { line, col } = posToLineCol(input, position);
+        throw new Error(`System spec ${label} must be bare identifiers; got '${name}' at line ${line}:${col}`);
+      }
+      return normalizeIdentifierValue(name);
+    });
+  };
+
+  const pieces = rawHeader.split(":");
+  const inputs = parseHeaderList(pieces[0] ?? "", "inputs");
+  const outputs = parseHeaderList(pieces[1] ?? "", "outputs");
+
+  return {
+    type: "Symbol",
+    original: input.slice(position, closing + 1),
+    value: "{#",
+    specHeaderPresent: true,
+    specHeaderRaw: rawHeader,
+    specInputs: inputs,
+    specOutputs: outputs,
+    specOutputsDeclared: pieces.length === 2,
+    pos: [position, position, closing + 1],
+  };
 }
 
 function tryMatchLoopHeader(input, position) {

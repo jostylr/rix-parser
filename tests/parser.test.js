@@ -743,13 +743,13 @@ describe("RiX Parser", () => {
       ]);
     });
 
-    test("system with equations using {$ } sigil", () => {
+    test("transitional {$ } sigil behaves like a block alias", () => {
       const ast = parseCode("{$ x :=: 3*x + 2; y :=: x };");
       expect(stripMetadata(ast)).toEqual([
         {
           type: "Statement",
           expression: {
-            type: "SystemContainer",
+            type: "BlockContainer",
             elements: [
               {
                 type: "BinaryOperation",

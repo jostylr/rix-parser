@@ -2406,6 +2406,26 @@ describe("Math Oracle Tokenizer", () => {
       expect(tokens.map((t) => t.value)).toEqual(["{:", "}", null]);
     });
 
+    test("{# with space produces anonymous {# token", () => {
+      const tokens = tokenize("{# p = x + 1 }");
+      const brace = tokens.find((t) => t.value === "{#");
+      expect(brace).toBeDefined();
+      expect(brace.specHeaderPresent).toBe(false);
+    });
+
+    test("{#x,y:p# stores parsed system spec header", () => {
+      const tokens = tokenize("{#x,y:p# p = x + y }");
+      const brace = tokens.find((t) => t.value === "{#");
+      expect(brace).toBeDefined();
+      expect(brace.specInputs).toEqual(["x", "y"]);
+      expect(brace.specOutputs).toEqual(["p"]);
+      expect(brace.specOutputsDeclared).toBe(true);
+    });
+
+    test("malformed {# header is rejected", () => {
+      expect(() => tokenize("{#x,,y# p = 1 }")).toThrow(/Malformed inputs list in system spec header/);
+    });
+
     test("^^ tokenizes as a single postfix symbol", () => {
       const tokens = tokenize("m^^");
       expect(tokens.map((t) => t.value)).toEqual(["m", "^^", null]);
