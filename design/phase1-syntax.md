@@ -325,34 +325,30 @@ Capital letters (`0A`–`0Z` except reserved) are available for user-defined bas
 
 ---
 
-## 9. REPL Command-Style Calls
+## 9. Implicit Adjacency (Multiplication & Application)
 
-Uppercase system identifiers followed by bare arguments (no parentheses) produce **CommandCall** nodes. This handles REPL commands naturally.
-
-```
-HELP algebra        # CommandCall: command=HELP, args=[algebra]
-LOAD mypackage      # CommandCall: command=LOAD, args=[mypackage]
-UNLOAD mypackage    # CommandCall: command=UNLOAD, args=[mypackage]
-HELP "syntax"       # CommandCall with string argument
-```
-
-Bare system identifiers (no arguments) remain plain `SystemIdentifier` nodes:
+Uppercase system identifiers followed by an adjacent expression (no operator) produce **ImplicitApplication** nodes — the callable consumes the maximal multiplicative chunk as its argument.
 
 ```
-HELP                # SystemIdentifier (no args → not a command call)
+F 3x          # ImplicitApplication: callable=F, argument=MUL(3, x)
+F G 7         # ImplicitApplication: callable=F, argument=ImplicitApplication(G, 7)
+3 F 7         # ImplicitMultiplication: left=3, right=ImplicitApplication(F, 7)
 ```
 
-Function call syntax with parentheses takes priority over command calls:
+Non-callable adjacent expressions produce **ImplicitMultiplication** (as before):
 
 ```
-SIN(x)              # FunctionCall (parentheses → not command call)
+3a            # ImplicitMultiplication: left=3, right=a
+a b           # ImplicitMultiplication: left=a, right=b
+5 10          # ImplicitMultiplication: left=5, right=10
 ```
 
-### AST node
+### AST nodes
 
 | Syntax | AST Node | Fields |
 |--------|----------|--------|
-| `HELP algebra` | `CommandCall` | `command`, `arguments: [...]` |
+| `F 3x` | `ImplicitApplication` | `callable`, `argument` |
+| `3a` | `ImplicitMultiplication` | `left`, `right` |
 
 ---
 
@@ -377,7 +373,7 @@ SIN(x)              # FunctionCall (parentheses → not command call)
 | `ValueSet` | `obj\|.` | `object` |
 | `DeferredBlock` | `@{...}` | `body` |
 | `Mutation` | `obj{= ...}` / `obj{! ...}` | `target`, `mutate`, `operations` |
-| `CommandCall` | `HELP topic` | `command`, `arguments` |
+| `ImplicitApplication` | `F 3x` | `callable`, `argument` |
 
 ### Modified behavior
 

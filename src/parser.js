@@ -28,6 +28,7 @@ const PRECEDENCE = {
 };
 
 const JUXTAPOSITION_PRECEDENCE = 95; // Between multiplication (90) and exponentiation (100)
+const IMPLICIT_APPLICATION_PRECEDENCE = 97; // Implicit callable application, tighter than implicit mul
 
 // Symbol table for operators and their parsing behavior
 const SYMBOL_TABLE = {
@@ -542,6 +543,52 @@ class Parser {
       }
     }
     return null;
+  }
+
+  // Check if an AST node is syntactically callable for implicit application.
+  // Callable means: uppercase-leading identifier (System) that is not an operator/constant/command,
+  // SystemFunctionRef, FunctionLambda, or result of implicit application (chained calls).
+  isCallableNode(node) {
+    if (node.type === "SystemIdentifier") {
+      // Check systemInfo — operators, constants, and commands are not callable by adjacency
+      const info = node.systemInfo;
+      if (!info) return true; // unknown → assume callable
+      if (info.type === "operator" || info.type === "constant") return false;
+      return true; // type "function" or "identifier" → callable
+    }
+    if (node.type === "SystemFunctionRef") return true;
+    if (node.type === "FunctionLambda") return true;
+    if (node.type === "ImplicitApplication") return true;
+    if (node.type === "FunctionCall") return true;
+    if (node.type === "SystemAccess") return true;
+    if (node.type === "SystemCall") return true;
+    if (node.type === "Call") return true;
+    // Grouping that wraps a callable is callable: (F), (@-(_2, _1))
+    if (node.type === "Grouping" && node.expression) return this.isCallableNode(node.expression);
+    return false;
+  }
+
+  // Check if the current token can start a new implicit operand (factor).
+  // This is used to detect adjacency — the next token must be something that
+  // can begin an expression in a multiplicative context.
+  canStartImplicitOperand() {
+    const t = this.current;
+    if (t.type === "End") return false;
+    if (t.type === "Number") return true;
+    if (t.type === "Identifier") {
+      // System identifiers that are operators (AND, OR, NOT) cannot start an implicit operand
+      if (t.kind === "System") {
+        const info = this.systemLookup(t.value);
+        if (info && info.type === "operator") return false;
+      }
+      return true;
+    }
+    if (t.type === "PlaceHolder") return true;
+    if (t.type === "OuterIdentifier") return true;
+    if (t.type === "String" && t.kind !== "comment") return true;
+    if (t.type === "Symbol" && t.value === "(") return true;
+    // Note: "[" is NOT included — it's a postfix bracket-index operator, not an adjacency start
+    return false;
   }
 
   // Parse expression with given minimum precedence
@@ -1562,10 +1609,10 @@ class Parser {
       }
 
 
-      // Special case for function calls - now works on any expression
+      // Special case for function calls and implicit multiplication with parens
       if (this.current.value === "(") {
-        // Number followed by '(' is implicit multiplication: 3(x+1)
-        if (left.type === "Number" || left.type === "UserIdentifier") {
+        // Non-callable expressions followed by '(' are implicit multiplication: 3(x+1), a(x+1), (x+1)(x+2)
+        if (!this.isCallableNode(left)) {
           if (JUXTAPOSITION_PRECEDENCE < minPrec) {
             break;
           }
@@ -1577,26 +1624,53 @@ class Parser {
         continue;
       }
 
-      // Juxtaposition (Implicit Multiplication): Number followed by Identifier or PlaceHolder or OuterIdentifier
-      // 3a, 3_1, 3@a, 3x^2
-      // EXCLUDE tokens that are known infix operators (e.g. 1 OR 2 should not be 1 * (OR 2))
-      if (
-        left.type === "Number" &&
-        (this.current.type === "Identifier" ||
-          this.current.type === "PlaceHolder" ||
-          this.current.type === "OuterIdentifier")
-      ) {
-        if (JUXTAPOSITION_PRECEDENCE < minPrec) {
-          break;
-        }
-
-        // If it's a known operator, it's NOT a juxtaposition
+      // Implicit adjacency: multiplication or callable application
+      // Handles: 3a, 3x^2, a b, 5 10, F 3, F 3x, 3 F 7, F G 7, etc.
+      if (this.canStartImplicitOperand()) {
+        // Skip adjacency if current token is a known infix operator (e.g. "1 OR 2")
         const nextSymbolInfo = this.getSymbolInfo(this.current);
         if (nextSymbolInfo && nextSymbolInfo.type === "infix") {
-          // Fall through to normal operator handling
+          // Fall through to normal operator handling below
         } else {
-          // Use parseExpression with JUXTAPOSITION_PRECEDENCE to ensure 
-          // we only consume the right side if it doesn't have higher precedence.
+          // Prefix operators like NOT when used as SystemIdentifier
+          if (
+            left.type === "SystemIdentifier" &&
+            left.systemInfo &&
+            left.systemInfo.type === "operator" && left.systemInfo.operatorType === "prefix"
+          ) {
+            // Parse a single operand at unary precedence
+            const operand = this.parseExpression(PRECEDENCE.UNARY);
+            left = this.createNode("UnaryOperation", {
+              operator: left.name,
+              operand: operand,
+              pos: left.pos,
+              original: left.original + (operand.original || ""),
+            });
+            continue;
+          }
+
+          // Implicit callable application: callable followed by adjacent operand
+          // F 3, F 3x, F G 7, etc. — callable consumes the maximal multiplicative chunk
+          if (this.isCallableNode(left)) {
+            if (IMPLICIT_APPLICATION_PRECEDENCE < minPrec) {
+              break;
+            }
+            // Parse the argument as a full multiplicative chunk (stops at addition and below)
+            const arg = this.parseExpression(PRECEDENCE.ADDITION + 1);
+            left = this.createNode("ImplicitApplication", {
+              callable: left,
+              argument: arg,
+              pos: [left.pos[0], left.pos[0], arg.pos[2]],
+              original: left.original + (arg.original || ""),
+            });
+            continue;
+          }
+
+          // Implicit multiplication: number/variable followed by adjacent operand
+          // 3a, 3 a, a b, 3x^2, (x+1)(x+2), etc.
+          if (JUXTAPOSITION_PRECEDENCE < minPrec) {
+            break;
+          }
           const right = this.parseExpression(JUXTAPOSITION_PRECEDENCE + 1);
           left = this.createNode("ImplicitMultiplication", {
             left: left,
@@ -1628,6 +1702,7 @@ class Parser {
           left.type === "SystemIdentifier" ||
           left.type === "SystemFunctionRef" ||
           left.type === "FunctionCall" ||
+          left.type === "ImplicitApplication" ||
           left.type === "PropertyAccess" ||
           left.type === "Derivative" ||
           left.type === "Integral")
@@ -1649,34 +1724,6 @@ class Parser {
       // Special case for mutation syntax: obj{= ...} or obj{! ...}
       if (this.current.value === "{=" || this.current.value === "{!") {
         left = this.parseMutation(left);
-        continue;
-      }
-
-      // Command-style call: HELP topic, LOAD pkg, UNLOAD pkg
-      // SystemIdentifier followed by Identifier/String/Number (no parens) → implicit call
-      if (
-        left.type === "SystemIdentifier" &&
-        (this.current.type === "Identifier" || this.current.type === "String" || this.current.type === "Number")
-      ) {
-        const args = [];
-        // Consume all following arguments until statement terminator or End
-        while (
-          this.current.type !== "End" &&
-          this.current.value !== ";" &&
-          this.current.value !== "," &&
-          this.current.value !== ")" &&
-          this.current.value !== "]" &&
-          this.current.value !== "}"
-        ) {
-          const arg = this.parsePrefix();
-          args.push(arg);
-        }
-        left = this.createNode("CommandCall", {
-          command: left,
-          arguments: args,
-          pos: left.pos,
-          original: left.original,
-        });
         continue;
       }
 
@@ -3612,12 +3659,16 @@ class Parser {
 
   // Parse function calls - now works on any expression, not just identifiers
   parseCall(target) {
-    // Lowercase letter-based user identifiers followed by ( are implicit multiplication: f(x) = f * (x)
-    // Numbers followed by ( are also implicit multiplication: 3(x) = 3 * (x)
-    // Operator-symbol identifiers (+, *, <, etc.) remain function calls
+    // Certain expression types followed by ( are implicit multiplication:
+    // - Lowercase letter-based user identifiers: f(x) = f * (x)
+    // - Numbers: 3(x+1) = 3 * (x+1)
+    // - Groupings: (a+b)(c) = (a+b) * (c)
+    // - Binary operations: (x+1)(x+2) already covered by Grouping
+    // Everything else (System identifiers, SystemFunctionRef, Call, PropertyAccess, etc.) → function call
     if (
       (target.type === "UserIdentifier" && /^[\p{L}]/u.test(target.name)) ||
-      target.type === "Number"
+      target.type === "Number" ||
+      (target.type === "Grouping" && !this.isCallableNode(target))
     ) {
       const grouping = this.parseGrouping();
       return this.createNode("ImplicitMultiplication", {

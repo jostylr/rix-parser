@@ -6,6 +6,9 @@ function testSystemLookup(name) {
     SIN: { type: "function", arity: 1 },
     COS: { type: "function", arity: 1 },
     PI: { type: "constant", value: Math.PI },
+    HELP: { type: "identifier" },
+    LOAD: { type: "identifier" },
+    UNLOAD: { type: "identifier" },
   };
   return systemSymbols[name] || { type: "identifier" };
 }
@@ -302,53 +305,4 @@ describe("Phase 1B Parser", () => {
     });
   });
 
-  describe("REPL command-style calls", () => {
-    test("HELP topic produces CommandCall", () => {
-      const ast = stripMetadata(parseCode("HELP algebra"));
-      expect(ast[0].type).toBe("CommandCall");
-      expect(ast[0].command.name).toBe("HELP");
-      expect(ast[0].arguments.length).toBe(1);
-      expect(ast[0].arguments[0]).toEqual({ type: "UserIdentifier", name: "algebra" });
-    });
-
-    test("LOAD package produces CommandCall", () => {
-      const ast = stripMetadata(parseCode("LOAD mypackage"));
-      expect(ast[0].type).toBe("CommandCall");
-      expect(ast[0].command.name).toBe("LOAD");
-      expect(ast[0].arguments[0]).toEqual({ type: "UserIdentifier", name: "mypackage" });
-    });
-
-    test("UNLOAD package produces CommandCall", () => {
-      const ast = stripMetadata(parseCode("UNLOAD mypackage"));
-      expect(ast[0].type).toBe("CommandCall");
-      expect(ast[0].command.name).toBe("UNLOAD");
-    });
-
-    test("bare HELP (no args) is just SystemIdentifier", () => {
-      const ast = stripMetadata(parseCode("HELP"));
-      expect(ast[0].type).toBe("SystemIdentifier");
-      expect(ast[0].name).toBe("HELP");
-    });
-
-    test("HELP with string arg", () => {
-      const ast = stripMetadata(parseCode('HELP "syntax"'));
-      expect(ast[0].type).toBe("CommandCall");
-      expect(ast[0].arguments[0].type).toBe("String");
-    });
-
-    test("HELP with semicolon still terminates", () => {
-      const ast = stripMetadata(parseCode("HELP algebra; x = 5;"));
-      expect(ast.length).toBe(2);
-      expect(ast[0].type).toBe("Statement");
-      expect(ast[0].expression.type).toBe("CommandCall");
-      expect(ast[0].expression.command.name).toBe("HELP");
-      expect(ast[1].type).toBe("Statement");
-      expect(ast[1].expression.operator).toBe("=");
-    });
-
-    test("SIN(x) is NOT a command call (has parens)", () => {
-      const ast = stripMetadata(parseCode("SIN(x);"));
-      expect(ast[0].expression.type).toBe("FunctionCall");
-    });
-  });
 });

@@ -2905,20 +2905,25 @@ describe("RiX Parser", () => {
       });
 
       test("comment between numbers", () => {
+        // With implicit multiplication, 5 ## comment ## 10 becomes 5 * 10
+        // (the comment is skipped during parsing, but preserved in AST)
         const ast = parseCode("5\n## comment\n10");
         expect(stripMetadata(ast)).toEqual([
           {
-            type: "Number",
-            value: "5",
+            type: "ImplicitMultiplication",
+            left: {
+              type: "Number",
+              value: "5",
+            },
+            right: {
+              type: "Number",
+              value: "10",
+            },
           },
           {
             type: "Comment",
             value: " comment",
             kind: "comment",
-          },
-          {
-            type: "Number",
-            value: "10",
           },
         ]);
       });

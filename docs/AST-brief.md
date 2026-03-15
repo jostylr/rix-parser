@@ -645,15 +645,15 @@ This document provides a comprehensive reference for all token types generated b
 ```
 **Purpose:** Map mutation syntax. `obj{= ops}` (copy mutation) lowers to `MUTCOPY`. `obj{! ops}` (in-place mutation) lowers to `MUTINPLACE`.
 
-### CommandCall
+### ImplicitApplication
 ```javascript
 {
-  command: ASTNode,   // SystemIdentifier for the command
-  arguments: [ASTNode], // Bare arguments (no parentheses in source)
-  original: string    // Combined original text
+  callable: ASTNode,  // The callable expression (e.g., SystemIdentifier)
+  argument: ASTNode,  // The maximal multiplicative chunk consumed as argument
+  original: string
 }
 ```
-**Purpose:** REPL command-style calls — uppercase system identifier followed by bare args without parentheses (`HELP algebra`). Lowers to `COMMAND`.
+**Purpose:** Implicit callable application by adjacency. When an uppercase-leading callable identifier is followed by an adjacent expression with no operator, the callable consumes the maximal multiplicative chunk as its argument. `F 3x` → `CALL(F, MUL(3, x))`. Nested: `F G 7` → `CALL(F, CALL(G, 7))`.
 
 ## Section 3: Common Token Properties
 
