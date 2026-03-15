@@ -1468,6 +1468,48 @@ describe("RiX Parser", () => {
     });
   });
 
+  describe("Script angle forms", () => {
+    test('script import expression parses path, modifiers, inputs, and outputs', () => {
+      const expr = stripMetadata(parseCode('<"poly" /-All,+Core,+@MAP/ a, b=@c ; x=result, y:deriv>;'))[0].expression;
+      expect(expr).toEqual({
+        type: "ScriptImportExpression",
+        path: { type: "String", value: "poly", kind: "quote" },
+        capabilityModifiers: [
+          { action: "remove", targetType: "all", target: "All" },
+          { action: "add", targetType: "group", target: "Core" },
+          { action: "add", targetType: "function", target: "MAP" },
+        ],
+        inputs: [
+          { target: "a", source: "a", mode: "copy" },
+          { target: "b", source: "c", mode: "alias", sourceScope: "ancestor" },
+        ],
+        outputs: [
+          { target: "x", source: "result", mode: "alias" },
+          { target: "y", source: "deriv", mode: "copy_meta" },
+        ],
+      });
+    });
+
+    test("script binding declaration parses contract/export forms", () => {
+      const decl = stripMetadata(parseCode("< a, b=, c~, d:, e~~, f:: >;"))[0].expression;
+      expect(decl).toEqual({
+        type: "ScriptBindingsDeclaration",
+        bindings: [
+          { target: "a", source: "a", mode: "copy" },
+          { target: "b", source: "b", mode: "alias" },
+          { target: "c", source: "c", mode: "copy" },
+          { target: "d", source: "d", mode: "copy_meta" },
+          { target: "e", source: "e", mode: "deep_copy" },
+          { target: "f", source: "f", mode: "deep_copy_meta" },
+        ],
+      });
+    });
+
+    test("script outputs reject ancestor sources", () => {
+      expect(() => parseCode('<"poly" ; x=@result>;')).toThrow("Ancestor scope sources are not allowed in this binding list");
+    });
+  });
+
   describe("Loop Headers And Break Blocks", () => {
     test("loop header with explicit max stores maxIterations", () => {
       const expr = stripMetadata(parseCode("{@:100@ i := 0; i < 1; i; i += 1 };"))[0].expression;

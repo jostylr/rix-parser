@@ -623,6 +623,8 @@ class Parser {
           return this.parseGrouping();
         } else if (token.value === "[") {
           return this.parseArray();
+        } else if (token.value === "<") {
+          return this.parseAngleForm();
         } else if (token.value === "{") {
           return this.parseBraceContainer();
         } else if (token.value === "{=" || token.value === "{?" || token.value === "{;" || token.value === "{|" || token.value === "{:" || token.value === "{@" || token.value === "{#"
@@ -2616,6 +2618,238 @@ class Parser {
     }
 
     return imports;
+  }
+
+  parseAngleForm() {
+    const startToken = this.current;
+    this.advance(); // consume '<'
+
+    if (this.current.value === ">") {
+      this.error("Angle form cannot be empty");
+    }
+
+    if (this.current.type === "String" && this.current.kind !== "comment" && this.current.kind !== "backtick") {
+      return this.parseScriptImportExpression(startToken);
+    }
+
+    const bindings = this.parseScriptBindingSpecs({ allowOuterSource: false });
+    if (this.current.value !== ">") {
+      this.error("Expected closing > for script declaration");
+    }
+    this.advance();
+
+    return this.createNode("ScriptBindingsDeclaration", {
+      bindings,
+      pos: startToken.pos,
+      original: startToken.original,
+    });
+  }
+
+  parseScriptImportExpression(startToken) {
+    const pathToken = this.current;
+    this.advance();
+
+    const pathNode = this.createNode("String", {
+      value: pathToken.value,
+      kind: pathToken.kind,
+      original: pathToken.original,
+    });
+
+    const capabilityModifiers =
+      this.current.value === "/"
+        ? this.parseCapabilityModifierList()
+        : [];
+
+    const inputs =
+      this.current.value !== ">" && this.current.value !== ";"
+        ? this.parseScriptBindingSpecs({ allowOuterSource: true })
+        : [];
+
+    let outputs = [];
+    if (this.current.value === ";") {
+      this.advance();
+      outputs =
+        this.current.value !== ">"
+          ? this.parseScriptBindingSpecs({ allowOuterSource: false })
+          : [];
+    }
+
+    if (this.current.value !== ">") {
+      this.error("Expected closing > for script import expression");
+    }
+    this.advance();
+
+    return this.createNode("ScriptImportExpression", {
+      path: pathNode,
+      ...(capabilityModifiers.length > 0 ? { capabilityModifiers } : {}),
+      ...(inputs.length > 0 ? { inputs } : {}),
+      ...(outputs.length > 0 ? { outputs } : {}),
+      pos: startToken.pos,
+      original: startToken.original,
+    });
+  }
+
+  parseCapabilityModifierList() {
+    this.advance(); // consume opening '/'
+
+    const modifiers = [];
+    while (this.current.type !== "End" && this.current.value !== "/") {
+      if (this.current.value !== "+" && this.current.value !== "-") {
+        this.error("Capability modifiers must start with + or -");
+      }
+
+      const action = this.current.value === "+" ? "add" : "remove";
+      this.advance();
+
+      let targetType;
+      let target;
+      if (this.current.type === "Identifier" && this.current.value.toUpperCase() === "ALL") {
+        targetType = "all";
+        target = "All";
+        this.advance();
+      } else if (this.current.type === "OuterIdentifier") {
+        targetType = "function";
+        target = this.current.value;
+        this.advance();
+      } else if (this.current.type === "Identifier") {
+        targetType = "group";
+        target = this.current.original.trim();
+        this.advance();
+      } else {
+        this.error("Expected capability group name, All, or @Function in capability modifiers");
+      }
+
+      modifiers.push({ action, targetType, target });
+
+      if (this.current.value === ",") {
+        this.advance();
+        if (this.current.value === "/") {
+          this.error("Trailing comma is not allowed in capability modifiers");
+        }
+      } else if (this.current.value !== "/") {
+        this.error("Expected ',' or closing / in capability modifiers");
+      }
+    }
+
+    if (this.current.value !== "/") {
+      this.error("Unterminated capability modifier list");
+    }
+    this.advance();
+    return modifiers;
+  }
+
+  parseScriptBindingSpecs(options = {}) {
+    const allowOuterSource = options.allowOuterSource === true;
+    const seenTargets = new Set();
+    const specs = [];
+
+    while (this.current.type !== "End" && this.current.value !== ">" && this.current.value !== ";") {
+      const spec = this.parseScriptBindingSpec({ allowOuterSource });
+      if (seenTargets.has(spec.target)) {
+        this.error(`Duplicate binding target '${spec.target}'`);
+      }
+      seenTargets.add(spec.target);
+      specs.push(spec);
+
+      if (this.current.value === ",") {
+        this.advance();
+        if (this.current.value === ">" || this.current.value === ";") {
+          this.error("Trailing comma is not allowed in script bindings");
+        }
+      } else if (this.current.value !== ">" && this.current.value !== ";") {
+        this.error("Expected ',' or end of script bindings");
+      }
+    }
+
+    return specs;
+  }
+
+  parseScriptBindingSpec(options = {}) {
+    const allowOuterSource = options.allowOuterSource === true;
+    const target = this.parseScriptBindingName("Expected binding target name");
+
+    let mode = "copy";
+    let source = target.name;
+    let sourceScope = "current";
+
+    if (this.current.value === "=") {
+      mode = "alias";
+      this.advance();
+      if (this.current.type === "Identifier" || this.current.type === "OuterIdentifier") {
+        const sourceRef = this.parseScriptBindingSource(allowOuterSource);
+        source = sourceRef.name;
+        sourceScope = sourceRef.scope;
+      }
+    } else if (this.current.value === "::") {
+      mode = "deep_copy_meta";
+      this.advance();
+      if (this.current.type === "Identifier" || this.current.type === "OuterIdentifier") {
+        const sourceRef = this.parseScriptBindingSource(allowOuterSource);
+        source = sourceRef.name;
+        sourceScope = sourceRef.scope;
+      }
+    } else if (this.current.value === "~") {
+      this.advance();
+      if (this.current.value === "~") {
+        mode = "deep_copy";
+        this.advance();
+      } else {
+        mode = "copy";
+      }
+      if (this.current.type === "Identifier" || this.current.type === "OuterIdentifier") {
+        const sourceRef = this.parseScriptBindingSource(allowOuterSource);
+        source = sourceRef.name;
+        sourceScope = sourceRef.scope;
+      }
+    } else if (this.current.value === ":") {
+      this.advance();
+      if (this.current.value === ":") {
+        mode = "deep_copy_meta";
+        this.advance();
+      } else {
+        mode = "copy_meta";
+      }
+      if (this.current.type === "Identifier" || this.current.type === "OuterIdentifier") {
+        const sourceRef = this.parseScriptBindingSource(allowOuterSource);
+        source = sourceRef.name;
+        sourceScope = sourceRef.scope;
+      }
+    }
+
+    return {
+      target: target.name,
+      source,
+      mode,
+      ...(sourceScope !== "current" ? { sourceScope } : {}),
+    };
+  }
+
+  parseScriptBindingName(message) {
+    if (this.current.type !== "Identifier") {
+      this.error(message);
+    }
+    const name = this.current.value;
+    this.advance();
+    return { name };
+  }
+
+  parseScriptBindingSource(allowOuterSource) {
+    if (this.current.type === "OuterIdentifier") {
+      if (!allowOuterSource) {
+        this.error("Ancestor scope sources are not allowed in this binding list");
+      }
+      const name = this.current.value;
+      this.advance();
+      return { name, scope: "ancestor" };
+    }
+
+    if (this.current.type !== "Identifier") {
+      this.error("Expected binding source name");
+    }
+
+    const name = this.current.value;
+    this.advance();
+    return { name, scope: "current" };
   }
 
   // Parse mutation syntax: obj{= +a=3, -.b, +c} or obj{! +a=3, -.b}
