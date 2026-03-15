@@ -619,7 +619,16 @@ class Parser {
         });
 
       case "Symbol":
-        if (token.value === "(") {
+        if (token.value === "...") {
+          this.advance();
+          // The precedence here ensures we capture the trailing expression.
+          const expr = this.parseExpression(PRECEDENCE.POSTFIX);
+          return this.createNode("Spread", {
+            expression: expr,
+            pos: token.pos,
+            original: token.original + (expr.original || ""),
+          });
+        } else if (token.value === "(") {
           return this.parseGrouping();
         } else if (token.value === "[") {
           return this.parseArray();
@@ -3488,7 +3497,18 @@ class Parser {
       condition: null,
     };
 
-    if (arg.type === "BinaryOperation" && arg.operator === "?|") {
+    if (arg.type === "Spread") {
+      result.param.isRest = true;
+      const inner = arg.expression;
+      if (
+        inner.type === "UserIdentifier" ||
+        (inner.type === "Identifier" && inner.kind === "User")
+      ) {
+        result.param.name = inner.name || inner.value;
+      } else {
+        this.error("Rest parameter must be an identifier");
+      }
+    } else if (arg.type === "BinaryOperation" && arg.operator === "?|") {
       // Hole-default: x ?| 2 — used only when arg is explicitly a hole
       result.param.name = arg.left.name || arg.left.value;
       result.param.holeDefault = arg.right;

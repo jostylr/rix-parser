@@ -98,6 +98,8 @@ const symbols = [
   "~{",
   "~[",
   ":=",
+  // Triple-dot spread operator (must come before double-dot)
+  "...",
   // Double-dot and dot-pipe operators (before single .)
   "..",
   "|.",
