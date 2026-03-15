@@ -100,6 +100,9 @@ const SYMBOL_TABLE = {
   "%=": { precedence: PRECEDENCE.ASSIGNMENT, associativity: "right", type: "infix" },
   "^=": { precedence: PRECEDENCE.ASSIGNMENT, associativity: "right", type: "infix" },
   "**=": { precedence: PRECEDENCE.ASSIGNMENT, associativity: "right", type: "infix" },
+  "~=": { precedence: PRECEDENCE.ASSIGNMENT, associativity: "right", type: "infix" },
+  "::=": { precedence: PRECEDENCE.ASSIGNMENT, associativity: "right", type: "infix" },
+  "~~=": { precedence: PRECEDENCE.ASSIGNMENT, associativity: "right", type: "infix" },
   "=": {
     precedence: PRECEDENCE.ASSIGNMENT,
     associativity: "right",
