@@ -516,6 +516,45 @@ describe("RiX Parser", () => {
       ]);
     });
 
+    test.each([
+      ["++=", "x ++= y"],
+      ["\\/=", "x \\/= y"],
+      ["/\\=", "x /\\= y"],
+      ["\\=", "x \\= y"],
+      ["**=", "x **= y"],
+      ["/^=", "x /^= y"],
+      ["/~=", "x /~= y"],
+    ])("combo assignment %s parses as a single operator", (operator, code) => {
+      const ast = parseCode(`${code};`);
+      expect(stripMetadata(ast)).toEqual([
+        {
+          type: "Statement",
+          expression: {
+            type: "BinaryOperation",
+            operator,
+            left: { type: "UserIdentifier", name: "x" },
+            right: { type: "UserIdentifier", name: "y" },
+          },
+        },
+      ]);
+    });
+
+    test.each([
+      ["x ++ y;", "++"],
+      ["x ++= y;", "++="],
+      ["x ** y;", "**"],
+      ["x **= y;", "**="],
+      ["x \\ y;", "\\"],
+      ["x \\= y;", "\\="],
+      ["x /\\ y;", "/\\"],
+      ["x /\\= y;", "/\\="],
+      ["x \\/ y;", "\\/"],
+      ["x \\/= y;", "\\/="],
+    ])("nearby operator distinction for %s", (code, operator) => {
+      const ast = parseCode(code);
+      expect(stripMetadata(ast)[0].expression.operator).toBe(operator);
+    });
+
     test("equation solving", () => {
       const ast = parseCode("x :=: 5;");
       expect(stripMetadata(ast)).toEqual([
