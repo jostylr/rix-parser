@@ -569,9 +569,27 @@ class Parser {
     if (node.type === "SystemAccess") return true;
     if (node.type === "SystemCall") return true;
     if (node.type === "Call") return true;
+    if (node.type === "MethodCall") return true;
     // Grouping that wraps a callable is callable: (F), (@-(_2, _1))
     if (node.type === "Grouping" && node.expression) return this.isCallableNode(node.expression);
     return false;
+  }
+
+  parseMethodName() {
+    if (this.current.type !== "Identifier") {
+      this.error("Expected property name after '.'");
+    }
+    const baseName = this.current.value;
+    const baseOriginal = this.current.original;
+    this.advance();
+
+    if (this.current.value === "!") {
+      const bangOriginal = this.current.original;
+      this.advance();
+      return { name: baseName + "!", original: baseOriginal + bangOriginal };
+    }
+
+    return { name: baseName, original: baseOriginal };
   }
 
   // Check if the current token can start a new implicit operand (factor).
@@ -769,11 +787,10 @@ class Parser {
           // .Name   → SystemAccess (a capability or meta flag)
           this.advance(); // consume '.'
           if (this.current.type === "Identifier") {
-            const propToken = this.current;
-            this.advance();
+            const property = this.parseMethodName();
             return this.createNode("SystemAccess", {
-              property: propToken.value,
-              original: token.original + propToken.original,
+              property: property.name,
+              original: token.original + property.original,
             });
           }
           return this.createNode("SystemObject", {
@@ -1361,18 +1378,13 @@ class Parser {
     } else if (operator.value === ".") {
       // Dot property access: P.type, P.Derivative, etc.
       // Right side must be an identifier (property name)
-      if (this.current.type !== "Identifier") {
-        this.error("Expected property name after '.'");
-      }
-      const propertyName = this.current.value;
-      const propertyOriginal = this.current.original;
-      this.advance();
+      const property = this.parseMethodName();
 
       return this.createNode("DotAccess", {
         object: left,
-        property: propertyName,
+        property: property.name,
         pos: left.pos,
-        original: left.original + operator.original + propertyOriginal,
+        original: left.original + operator.original + property.original,
       });
     } else if (operator.value === "..") {
       // Double-dot: obj.. returns all meta properties as a map
@@ -3710,6 +3722,16 @@ class Parser {
         pos: target.pos,
         original: target.original + "(...)",
         viaSystemContext: true,
+      });
+    }
+
+    if (target.type === "DotAccess") {
+      return this.createNode("MethodCall", {
+        object: target.object,
+        method: target.property,
+        arguments: args,
+        pos: target.pos,
+        original: target.original + "(...)",
       });
     }
 

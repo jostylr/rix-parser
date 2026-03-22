@@ -2089,6 +2089,41 @@ describe("RiX Parser", () => {
         test('unclosed ASK parentheses', () => {
           expect(() => parseCode('x?(y')).toThrow();
         });
+
+        test('method call uses a distinct AST node and keeps mutating ! in the method name', () => {
+          const result = parseCode('arr.Push!(3, 4);');
+          expect(stripMetadata(result)).toEqual([{
+            type: 'Statement',
+            expression: {
+              type: 'MethodCall',
+              object: { type: 'UserIdentifier', name: 'arr' },
+              method: 'PUSH!',
+              arguments: {
+                positional: [
+                  { type: 'Number', value: '3' },
+                  { type: 'Number', value: '4' }
+                ],
+                keyword: {}
+              }
+            }
+          }]);
+        });
+
+        test('system access also allows ! in dotted capability names', () => {
+          const result = parseCode('.Push!(3);');
+          expect(stripMetadata(result)).toEqual([{
+            type: 'Statement',
+            expression: {
+              type: 'SystemCall',
+              name: 'PUSH!',
+              arguments: {
+                positional: [{ type: 'Number', value: '3' }],
+                keyword: {}
+              },
+              viaSystemContext: true
+            }
+          }]);
+        });
       });
     });
 
