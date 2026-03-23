@@ -807,6 +807,22 @@ class Parser {
           return this.createNode("SelfRef", {
             original: token.original,
           });
+        } else if (token.value === ":") {
+          // Colon-string: :word produces a string literal in prefix position
+          this.advance(); // consume ':'
+          if (this.current.type === "Identifier" || this.current.type === "Number") {
+            const valToken = this.current;
+            // Use original text (trimmed) to preserve case for identifiers
+            // (.value is uppercased for System identifiers)
+            const rawText = valToken.original.trim();
+            this.advance(); // consume identifier/number
+            return this.createNode("String", {
+              value: rawText,
+              kind: "colon",
+              original: token.original + valToken.original,
+            });
+          }
+          this.error(`Expected identifier or number after ':' in colon-string`);
         } else {
           this.error(`Unexpected token in prefix position: ${token.value}`);
         }
