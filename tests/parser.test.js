@@ -89,7 +89,7 @@ describe("RiX Parser", () => {
     });
 
     test("function definition with hole-default parameters", () => {
-      const ast = parseCode("f(x, n ?| 5) :-> x^n;");
+      const ast = parseCode("f(x, n ?= 5) :-> x^n;");
       expect(stripMetadata(ast)).toEqual([
         {
           type: "Statement",
@@ -117,7 +117,7 @@ describe("RiX Parser", () => {
     });
 
     test("function definition with keyword-only parameters", () => {
-      const ast = parseCode("f(x, n ?| 5; a ?| 0) :-> (x-a)^n + 1;");
+      const ast = parseCode("f(x, n ?= 5; a ?= 0) :-> (x-a)^n + 1;");
       expect(stripMetadata(ast)).toEqual([
         {
           type: "Statement",
@@ -396,7 +396,7 @@ describe("RiX Parser", () => {
     });
 
     test("simple assignment-style function definition", () => {
-      const ast = parseCode("f := (x, n ?| 5; a ?| 0) -> (x-a)^n + 1;");
+      const ast = parseCode("f := (x, n ?= 5; a ?= 0) -> (x-a)^n + 1;");
       expect(stripMetadata(ast)).toEqual([
         {
           type: "Statement",

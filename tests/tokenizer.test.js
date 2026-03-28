@@ -1432,14 +1432,12 @@ describe("Math Oracle Tokenizer", () => {
       });
 
       test("boolean operators", () => {
-        const tokens = tokenize("?<= ?>= ?< ?> ?=");
+        const tokens = tokenize("=== ?= ?|");
         expect(tokens).toEqual(
           withEnd([
-            { type: "Symbol", original: "?<=", value: "?<=", pos: [0, 0, 3] },
-            { type: "Symbol", original: " ?>=", value: "?>=", pos: [3, 4, 7] },
-            { type: "Symbol", original: " ?<", value: "?<", pos: [7, 8, 10] },
-            { type: "Symbol", original: " ?>", value: "?>", pos: [10, 11, 13] },
-            { type: "Symbol", original: " ?=", value: "?=", pos: [13, 14, 16] },
+            { type: "Symbol", original: "===", value: "===", pos: [0, 0, 3] },
+            { type: "Symbol", original: " ?=", value: "?=", pos: [3, 4, 6] },
+            { type: "Symbol", original: " ?|", value: "?|", pos: [6, 7, 9] },
           ]),
         );
       });

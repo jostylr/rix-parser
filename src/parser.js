@@ -14,8 +14,8 @@ const PRECEDENCE = {
   LOGICAL_OR: 30, // OR (if system identifier)
   LOGICAL_AND: 40, // AND (if system identifier)
   CONDITION: 45, // ? operator for conditions
-  EQUALITY: 50, // =, ?=, !=
-  COMPARISON: 60, // <, >, <=, >=, ?<, ?>, etc.
+  EQUALITY: 50, // ==, ===, !=
+  COMPARISON: 60, // <, >, <=, >=
   INTERVAL: 70, // :
   CONVERSION: 75, // _>, <_
   ADDITION: 80, // +, -
@@ -115,11 +115,6 @@ const SYMBOL_TABLE = {
     associativity: "right",
     type: "infix",
   },
-  "?=": {
-    precedence: PRECEDENCE.EQUALITY,
-    associativity: "left",
-    type: "infix",
-  },
   "!=": {
     precedence: PRECEDENCE.EQUALITY,
     associativity: "left",
@@ -128,6 +123,16 @@ const SYMBOL_TABLE = {
   "==": {
     precedence: PRECEDENCE.EQUALITY,
     associativity: "left",
+    type: "infix",
+  },
+  "===": {
+    precedence: PRECEDENCE.EQUALITY,
+    associativity: "left",
+    type: "infix",
+  },
+  "?=": {
+    precedence: PRECEDENCE.EQUALITY,
+    associativity: "right",
     type: "infix",
   },
 
@@ -148,26 +153,6 @@ const SYMBOL_TABLE = {
     type: "infix",
   },
   ">=": {
-    precedence: PRECEDENCE.COMPARISON,
-    associativity: "left",
-    type: "infix",
-  },
-  "?<": {
-    precedence: PRECEDENCE.COMPARISON,
-    associativity: "left",
-    type: "infix",
-  },
-  "?>": {
-    precedence: PRECEDENCE.COMPARISON,
-    associativity: "left",
-    type: "infix",
-  },
-  "?<=": {
-    precedence: PRECEDENCE.COMPARISON,
-    associativity: "left",
-    type: "infix",
-  },
-  "?>=": {
     precedence: PRECEDENCE.COMPARISON,
     associativity: "left",
     type: "infix",
@@ -1089,7 +1074,7 @@ class Parser {
         });
       } else if (left.type === "Grouping" && left.expression) {
         // Handle single-parameter cases: (x) -> expr, (x ? cond) -> expr,
-        // (x ?| holeDefault) -> expr
+        // (x ?= holeDefault) -> expr
         let parameters = {
           positional: [],
           keyword: [],
@@ -3324,8 +3309,8 @@ class Parser {
       this.error("Expected parameter name");
     }
 
-    // Check for hole-default value: x ?| defaultExpr
-    if (this.current.value === "?|") {
+    // Check for hole-default value: x ?= defaultExpr
+    if (this.current.value === "?=") {
       this.advance();
       param.holeDefault = this.parseExpression(PRECEDENCE.CONDITION + 1);
     }
@@ -3589,8 +3574,8 @@ class Parser {
       } else {
         this.error("Rest parameter must be an identifier");
       }
-    } else if (arg.type === "BinaryOperation" && arg.operator === "?|") {
-      // Hole-default: x ?| 2 — used only when arg is explicitly a hole
+    } else if (arg.type === "BinaryOperation" && arg.operator === "?=") {
+      // Hole-default: x ?= 2 — used only when arg is omitted or explicitly a hole
       result.param.name = arg.left.name || arg.left.value;
       result.param.holeDefault = arg.right;
     } else if (arg.type === "BinaryOperation" && arg.operator === "?") {
