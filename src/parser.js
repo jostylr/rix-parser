@@ -249,6 +249,11 @@ const SYMBOL_TABLE = {
     type: "infix",
     prefix: true,
   },
+  "@@": {
+    precedence: PRECEDENCE.UNARY,
+    associativity: "right",
+    type: "prefix",
+  },
   "-": {
     precedence: PRECEDENCE.ADDITION,
     associativity: "left",
@@ -715,6 +720,15 @@ class Parser {
           return this.parseOperatorBrace(token.value);
         } else if (token.value === "{!") {
           return this.parseBreakBlock();
+        } else if (token.value === "@@") {
+          this.advance(); // consume '@@'
+          const expr = this.parseExpression(PRECEDENCE.UNARY);
+          return this.createNode("SystemCapabilityCall", {
+            property: "EVAL",
+            arguments: { positional: [expr], keyword: {}, metadata: {} },
+            pos: token.pos,
+            original: token.original + (expr.original || ""),
+          });
         } else if (token.value === "@") {
           // @ followed by { or brace sigil = deferred block: @{; ...}, @{? ...}, @{...}
           this.advance(); // consume '@'
