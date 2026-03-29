@@ -434,6 +434,7 @@ const SYMBOL_TABLE = {
   "{;": { precedence: 0, type: "brace_sigil" },
   "{|": { precedence: 0, type: "brace_sigil" },
   "{:": { precedence: 0, type: "brace_sigil" },
+  "{..": { precedence: 0, type: "brace_sigil" },
   "{@": { precedence: 0, type: "brace_sigil" },
   "{#": { precedence: 0, type: "brace_sigil" },
   "{$": { precedence: 0, type: "brace_sigil" },
@@ -697,7 +698,7 @@ class Parser {
           return this.parseAngleForm();
         } else if (token.value === "{") {
           return this.parseBraceContainer();
-        } else if (token.value === "{=" || token.value === "{?" || token.value === "{;" || token.value === "{|" || token.value === "{:" || token.value === "{@" || token.value === "{#"
+        } else if (token.value === "{=" || token.value === "{?" || token.value === "{;" || token.value === "{|" || token.value === "{:" || token.value === "{@" || token.value === "{#" || token.value === "{.."
           || token.value === "{$") {
           if (token.value === "{#") {
             return this.parseSystemSpecLiteral();
@@ -705,6 +706,7 @@ class Parser {
           return this.parseBraceSigil(token.value, token.containerName ?? null, {
             loopMax: token.loopMax,
             loopUnlimited: token.loopUnlimited === true,
+            captureMode: token.captureMode ?? null,
           });
         } else if (
           token.value === "{+" ||
@@ -733,7 +735,7 @@ class Parser {
           // @ followed by { or brace sigil = deferred block: @{; ...}, @{? ...}, @{...}
           this.advance(); // consume '@'
           const nextVal = this.current.value;
-          if (nextVal === "{" || nextVal === "{;" || nextVal === "{?" || nextVal === "{=" || nextVal === "{|" || nextVal === "{:" || nextVal === "{@" || nextVal === "{#" || nextVal === "{$") {
+          if (nextVal === "{" || nextVal === "{;" || nextVal === "{?" || nextVal === "{=" || nextVal === "{|" || nextVal === "{:" || nextVal === "{@" || nextVal === "{#" || nextVal === "{$" || nextVal === "{..") {
             let inner;
             if (nextVal === "{") {
               inner = this.parseBraceContainer();
@@ -743,6 +745,7 @@ class Parser {
               inner = this.parseBraceSigil(nextVal, this.current.containerName ?? null, {
                 loopMax: this.current.loopMax,
                 loopUnlimited: this.current.loopUnlimited === true,
+                captureMode: this.current.captureMode ?? null,
               });
             }
             return this.createNode("DeferredBlock", {
@@ -2156,6 +2159,68 @@ class Parser {
     });
   }
 
+  isConstructorCaptureOperator(value) {
+    return value === "==" || value === ":=" || value === "~=" || value === "::=" || value === "~~=";
+  }
+
+  captureModeFromOperator(value) {
+    if (value === "==") return "alias";
+    if (value === ":=") return "copy";
+    if (value === "~=") return "refresh";
+    if (value === "::=") return "deep_copy";
+    if (value === "~~=") return "deep_refresh";
+    return null;
+  }
+
+  parseCapturedConstructorElement() {
+    let captureMode = null;
+    if (this.isConstructorCaptureOperator(this.current.value)) {
+      captureMode = this.captureModeFromOperator(this.current.value);
+      this.advance();
+    }
+    const expression = this.parseExpression(0);
+    if (!captureMode) return expression;
+    return this.createNode("CapturedEntry", {
+      captureMode,
+      expression,
+      pos: expression.pos,
+      original: expression.original,
+    });
+  }
+
+  parseMapConstructorEntry() {
+    let key;
+    if (this.current.type === "Identifier" && (this.peek().value === "=" || this.isConstructorCaptureOperator(this.peek().value))) {
+      const token = this.current;
+      this.advance();
+      key = this.createNode(token.kind === "System" ? "SystemIdentifier" : "UserIdentifier", {
+        name: token.value,
+        ...(token.kind === "System" ? { systemInfo: this.systemLookup(token.value) } : {}),
+        original: token.original,
+      });
+    } else if (this.current.value === "(") {
+      key = this.parseGrouping();
+    } else {
+      key = this.parseExpression(PRECEDENCE.ASSIGNMENT + 1);
+    }
+
+    const operator = this.current.value;
+    if (operator !== "=" && !this.isConstructorCaptureOperator(operator)) {
+      return key;
+    }
+
+    const captureMode = operator === "=" ? null : this.captureModeFromOperator(operator);
+    this.advance();
+    const value = this.parseExpression(0);
+    return this.createNode("MapEntry", {
+      key,
+      value,
+      captureMode,
+      pos: key.pos,
+      original: key.original,
+    });
+  }
+
   // Parse brace sigil containers: {= map, {? case, {; block, {| set, {: tuple, {@ loop
   parseBraceSigil(sigil, containerName = null, options = {}) {
     const startToken = this.current;
@@ -2166,6 +2231,7 @@ class Parser {
     }
 
     const sigilTypeMap = {
+      "{..": "ArrayContainer",
       "{=": "MapContainer",
       "{?": "CaseContainer",
       "{;": "BlockContainer",
@@ -2193,6 +2259,12 @@ class Parser {
         ? this.parseImportHeader()
         : [];
     const elements = [];
+    const parseElement =
+      sigil === "{="
+        ? () => this.parseMapConstructorEntry()
+        : sigil === "{|" || sigil === "{:" || sigil === "{.."
+          ? () => this.parseCapturedConstructorElement()
+          : () => this.parseExpression(0);
 
     if (!isCloser(this.current.value)) {
       do {
@@ -2202,14 +2274,19 @@ class Parser {
           continue;
         }
 
-        const element = this.parseExpression(0);
+        const element = parseElement();
         if (
           sigil === "{=" &&
           element &&
-          element.type === "BinaryOperation" &&
-          (element.operator === "=" || element.operator === ":=")
+          (element.type === "BinaryOperation" || element.type === "MapEntry") &&
+          (
+            element.type === "MapEntry" ||
+            element.operator === "=" ||
+            element.operator === ":="
+          )
         ) {
-          const lhsType = element.left?.type;
+          const lhs = element.type === "MapEntry" ? element.key : element.left;
+          const lhsType = lhs?.type;
           const isIdentifierSugar =
             lhsType === "UserIdentifier" || lhsType === "SystemIdentifier";
           const isParenthesizedExpr = lhsType === "Grouping";
@@ -2252,6 +2329,7 @@ class Parser {
       ...(containerName ? { name: containerName } : {}),
       ...(sigil === "{@" && options.loopMax !== undefined ? { maxIterations: options.loopMax } : {}),
       ...(sigil === "{@" && options.loopUnlimited ? { unlimited: true } : {}),
+      ...(options.captureMode ? { defaultCaptureMode: this.captureModeFromOperator(options.captureMode) } : {}),
       ...(imports.length > 0 ? { imports: imports } : {}),
       elements: elements,
       pos: startToken.pos,
@@ -2478,6 +2556,7 @@ class Parser {
 
     return this.createNode("TensorLiteral", {
       shape,
+      ...(startToken.captureMode ? { defaultCaptureMode: this.captureModeFromOperator(startToken.captureMode) } : {}),
       elements,
       pos: startToken.pos,
       original: startToken.original,

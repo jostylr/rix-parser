@@ -3976,4 +3976,37 @@ describe("RiX Parser", () => {
       });
     });
   });
+
+  describe("Constructor capture syntax", () => {
+    test("{.. 1, 2, 3 } parses as ArrayContainer", () => {
+      const ast = stripMetadata(parseCode("{.. 1, 2, 3 };"))[0].expression;
+      expect(ast.type).toBe("ArrayContainer");
+      expect(ast.elements).toHaveLength(3);
+    });
+
+    test("{::= a = x, b == y } records constructor and entry capture modes", () => {
+      const ast = stripMetadata(parseCode("{::= a = x, b == y };"))[0].expression;
+      expect(ast.type).toBe("MapContainer");
+      expect(ast.defaultCaptureMode).toBe("deep_copy");
+      expect(ast.elements[0]).toEqual({
+        type: "MapEntry",
+        key: { type: "UserIdentifier", name: "a" },
+        value: { type: "UserIdentifier", name: "x" },
+        captureMode: null,
+      });
+      expect(ast.elements[1]).toEqual({
+        type: "MapEntry",
+        key: { type: "UserIdentifier", name: "b" },
+        value: { type: "UserIdentifier", name: "y" },
+        captureMode: "alias",
+      });
+    });
+
+    test("{::=:2x2: a, b; c, d } parses as TensorLiteral with capture mode", () => {
+      const ast = stripMetadata(parseCode("{::=:2x2: a, b; c, d };"))[0].expression;
+      expect(ast.type).toBe("TensorLiteral");
+      expect(ast.defaultCaptureMode).toBe("deep_copy");
+      expect(ast.shape).toEqual([2, 2]);
+    });
+  });
 });

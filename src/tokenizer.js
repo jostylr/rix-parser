@@ -827,6 +827,64 @@ function tryMatchBrace(input, position) {
 
   const isWhitespace = (c) => c === " " || c === "\t" || c === "\n" || c === "\r" || c === undefined;
   const ch = input[position + 1]; // char immediately after {
+  const captureOps = ["~~=", "::=", ":=", "~=", "=="];
+
+  const makeAdvancedConstructorToken = (value, start, end, extras = {}) => ({
+    type: "Symbol",
+    original: input.slice(position, end),
+    value,
+    pos: [position, position, end],
+    ...extras,
+  });
+
+  if (input.slice(position + 1).startsWith("..")) {
+    const after = input[position + 3];
+    if (!isWhitespace(after) && after !== "}") {
+      const { line, col } = posToLineCol(input, position);
+      throw new Error(`Brace array '{..' must be followed by a space or '}' at line ${line}:${col}`);
+    }
+    return makeAdvancedConstructorToken("{..", position, position + 3);
+  }
+
+  for (const op of captureOps) {
+    if (!input.slice(position + 1).startsWith(op)) continue;
+
+    let cursor = position + 1 + op.length;
+    let value = "{=";
+    const extras = { captureMode: op };
+
+    if (input.slice(cursor).startsWith("..")) {
+      value = "{..";
+      cursor += 2;
+    } else if (input[cursor] === "|") {
+      value = "{|";
+      cursor += 1;
+    } else if (input[cursor] === ":") {
+      value = "{:";
+      cursor += 1;
+
+      if (/[0-9]/.test(input[cursor] || "")) {
+        const shapeStart = cursor;
+        while (cursor < input.length && /[0-9x]/.test(input[cursor])) {
+          cursor++;
+        }
+        if (input[cursor] !== ":") {
+          const { line, col } = posToLineCol(input, position);
+          throw new Error(`Tensor constructor header must end with ':' at line ${line}:${col}`);
+        }
+        extras.containerName = input.slice(shapeStart, cursor).toLowerCase();
+        cursor += 1;
+      }
+    }
+
+    const after = input[cursor];
+    if (!isWhitespace(after) && after !== "}") {
+      const { line, col } = posToLineCol(input, position);
+      throw new Error(`Constructor header '{${op}' must be followed by a valid container marker and then a space or '}' at line ${line}:${col}`);
+    }
+
+    return makeAdvancedConstructorToken(value, position, cursor, extras);
+  }
 
   // 1. Operator brace detection (longest sequences first)
   const operatorSequences = ["&&", "||", "\\/", "/\\", "++", "<<", ">>", "+", "*"];
