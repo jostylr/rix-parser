@@ -292,6 +292,16 @@ const SYMBOL_TABLE = {
     associativity: "left",
     type: "infix",
   },
+  "~:": {
+    precedence: PRECEDENCE.CONVERSION,
+    associativity: "left",
+    type: "infix",
+  },
+  "~!:": {
+    precedence: PRECEDENCE.CONVERSION,
+    associativity: "left",
+    type: "infix",
+  },
 
   // Multiplication/division
   "*": {
@@ -1437,6 +1447,36 @@ class Parser {
         object: left,
         pos: left.pos,
         original: left.original + operator.original,
+      });
+    } else if (operator.value === "?") {
+      right = this.parseExpression(rightPrec);
+      if (right?.type === "String" && right.kind === "colon") {
+        return this.createNode("SemanticHas", {
+          expression: left,
+          name: right.value,
+          pos: left.pos,
+          original: left.original + operator.original + right.original,
+        });
+      }
+
+      return this.createNode("BinaryOperation", {
+        operator: operator.value,
+        left: left,
+        right: right,
+        pos: left.pos,
+        original: left.original + operator.original,
+      });
+    } else if (operator.value === "~:" || operator.value === "~!:") {
+      right = this.parseExpression(rightPrec);
+      if (!(right?.type === "String" && right.kind === "colon")) {
+        this.error(`Semantic conversion target must be a colon-string like :rational after '${operator.value}'`);
+      }
+
+      return this.createNode(operator.value === "~:" ? "SemanticConvertSoft" : "SemanticConvertStrict", {
+        expression: left,
+        typeName: right.value,
+        pos: left.pos,
+        original: left.original + operator.original + right.original,
       });
     } else {
       // Binary operator

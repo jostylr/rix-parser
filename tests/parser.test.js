@@ -4022,6 +4022,48 @@ describe("RiX Parser", () => {
         ],
       });
     });
+
+    test("x ? :rational parses as SemanticHas", () => {
+      const ast = stripMetadata(parseCode("x ? :rational;"))[0].expression;
+      expect(ast).toEqual({
+        type: "SemanticHas",
+        expression: { type: "UserIdentifier", name: "x" },
+        name: "rational",
+      });
+    });
+
+    test("x ? y remains a normal membership BinaryOperation", () => {
+      const ast = stripMetadata(parseCode("x ? y;"))[0].expression;
+      expect(ast).toEqual({
+        type: "BinaryOperation",
+        operator: "?",
+        left: { type: "UserIdentifier", name: "x" },
+        right: { type: "UserIdentifier", name: "y" },
+      });
+    });
+
+    test("x ~: :rational parses as SemanticConvertSoft", () => {
+      const ast = stripMetadata(parseCode("x ~: :rational;"))[0].expression;
+      expect(ast).toEqual({
+        type: "SemanticConvertSoft",
+        expression: { type: "UserIdentifier", name: "x" },
+        typeName: "rational",
+      });
+    });
+
+    test("x ~!: :rational parses as SemanticConvertStrict", () => {
+      const ast = stripMetadata(parseCode("x ~!: :rational;"))[0].expression;
+      expect(ast).toEqual({
+        type: "SemanticConvertStrict",
+        expression: { type: "UserIdentifier", name: "x" },
+        typeName: "rational",
+      });
+    });
+
+    test("semantic conversion rejects non-colon targets", () => {
+      expect(() => parseCode("x ~: y;")).toThrow("Semantic conversion target must be a colon-string like :rational after '~:'");
+      expect(() => parseCode("x ~!: y;")).toThrow("Semantic conversion target must be a colon-string like :rational after '~!:'");
+    });
   });
 
   describe("Destructuring assignment", () => {
