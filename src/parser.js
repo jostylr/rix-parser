@@ -1439,9 +1439,30 @@ class Parser {
     } else {
       // Binary operator
       right = this.parseExpression(rightPrec);
+      let assignmentLeft = left;
+      if (this.isDirectAssignmentOperator(operator.value)) {
+        const simpleLValueTypes = new Set([
+          "UserIdentifier",
+          "SystemIdentifier",
+          "OuterIdentifier",
+          "SystemAccess",
+          "DotAccess",
+          "PropertyAccess",
+          "BracketIndex",
+          "SelfRef",
+          "Number",
+        ]);
+        if (!simpleLValueTypes.has(left?.type)) {
+          try {
+            assignmentLeft = this.convertExpressionToDestructureTarget(left);
+          } catch (_error) {
+            assignmentLeft = left;
+          }
+        }
+      }
       return this.createNode("BinaryOperation", {
         operator: operator.value,
-        left: left,
+        left: assignmentLeft,
         right: right,
         pos: left.pos,
         original: left.original + operator.original,
@@ -1564,8 +1585,7 @@ class Parser {
   }
 
   parseTupleElement() {
-    // Parse regular expression (underscore is handled by parsePrefix)
-    return this.parseExpression(0);
+    return this.parseCapturedConstructorElement();
   }
 
   parseArray() {
@@ -1905,7 +1925,7 @@ class Parser {
           element = this.parseGeneratorChain();
         } else {
           // Parse expression normally first
-          element = this.parseExpression(0);
+          element = this.parseCapturedConstructorElement();
 
           // Check if this element is actually a generator chain (parsed as binary operations)
           if (
@@ -2057,6 +2077,257 @@ class Parser {
     }
   }
 
+  isDirectAssignmentOperator(value) {
+    return value === "=" || value === ":=" || value === "~=" || value === "::=" || value === "~~=";
+  }
+
+  createDestructureTargetNode(type, props, sourceNode = null) {
+    return this.createNode(type, {
+      ...props,
+      ...(sourceNode?.pos ? { pos: sourceNode.pos } : {}),
+      ...(sourceNode?.original ? { original: sourceNode.original } : {}),
+    });
+  }
+
+  wrapDestructureTarget(target, wrappers) {
+    let wrapped = target;
+    for (const wrapper of wrappers) {
+      if (wrapper.type === "capture") {
+        wrapped = this.createDestructureTargetNode("DestructureBindingModeTarget", {
+          bindingMode: wrapper.bindingMode,
+          target: wrapped,
+        }, wrapped);
+      } else if (wrapper.type === "semantic") {
+        wrapped = this.createDestructureTargetNode("DestructureSemanticTarget", {
+          header: wrapper.header,
+          target: wrapped,
+        }, wrapped);
+      }
+    }
+    return wrapped;
+  }
+
+  explicitMapKeyExpression(node) {
+    if (node?.type === "Array" && Array.isArray(node.elements) && node.elements.length === 1) {
+      return node.elements[0];
+    }
+    return null;
+  }
+
+  convertExpressionToDestructureTarget(node) {
+    const wrappers = [];
+    let current = node;
+
+    while (current?.type === "CapturedEntry" || current?.type === "ValueOutfit") {
+      if (current.type === "CapturedEntry") {
+        wrappers.push({ type: "capture", bindingMode: current.captureMode });
+        current = current.expression;
+      } else {
+        wrappers.push({ type: "semantic", header: current.header || null });
+        current = current.expression;
+      }
+    }
+
+    let target;
+
+    if (current?.type === "UserIdentifier" || current?.type === "SystemIdentifier") {
+      target = this.createDestructureTargetNode("DestructureVariableTarget", {
+        name: current.name,
+      }, current);
+    } else if (current?.type === "Spread") {
+      target = this.createDestructureTargetNode("DestructureRestTarget", {
+        target: this.convertExpressionToDestructureTarget(current.expression),
+      }, current);
+    } else if (current?.type === "Array" || current?.type === "ArrayContainer") {
+      const elements = current.elements || [];
+      const entries = [];
+      let rest = null;
+      for (let i = 0; i < elements.length; i++) {
+        const entry = this.convertExpressionToDestructureTarget(elements[i]);
+        if (entry.type === "DestructureRestTarget") {
+          if (rest) this.error("Destructuring patterns allow at most one rest capture");
+          if (i !== elements.length - 1) this.error("Rest capture must be in final position");
+          rest = entry;
+        } else {
+          entries.push(entry);
+        }
+      }
+      target = this.createDestructureTargetNode("DestructureArrayPattern", {
+        entries,
+        rest,
+      }, current);
+    } else if (current?.type === "Tuple" || current?.type === "TupleContainer") {
+      const elements = current.elements || [];
+      const entries = [];
+      let rest = null;
+      for (let i = 0; i < elements.length; i++) {
+        const entry = this.convertExpressionToDestructureTarget(elements[i]);
+        if (entry.type === "DestructureRestTarget") {
+          if (rest) this.error("Destructuring patterns allow at most one rest capture");
+          if (i !== elements.length - 1) this.error("Rest capture must be in final position");
+          rest = entry;
+        } else {
+          entries.push(entry);
+        }
+      }
+      target = this.createDestructureTargetNode("DestructureTuplePattern", {
+        entries,
+        rest,
+      }, current);
+    } else if (current?.type === "MapContainer") {
+      const entries = [];
+      let rest = null;
+      for (let i = 0; i < current.elements.length; i++) {
+        const entry = this.convertMapDestructureEntry(current.elements[i]);
+        if (entry.type === "DestructureRestTarget") {
+          if (rest) this.error("Destructuring patterns allow at most one rest capture");
+          if (i !== current.elements.length - 1) this.error("Rest capture must be in final position");
+          rest = entry;
+        } else {
+          entries.push(entry);
+        }
+      }
+      target = this.createDestructureTargetNode("DestructureMapPattern", {
+        entries,
+        rest,
+      }, current);
+    } else if (current?.type === "TensorLiteral") {
+      if (current.shape.length !== 2) {
+        this.error("Tensor destructuring currently supports rank-2 patterns only");
+      }
+      const [rows, cols] = current.shape;
+      if (current.elements.length !== rows * cols) {
+        this.error("Malformed tensor destructure");
+      }
+      const rowTargets = [];
+      for (let row = 0; row < rows; row++) {
+        const rowEntries = [];
+        for (let col = 0; col < cols; col++) {
+          rowEntries.push(this.convertExpressionToDestructureTarget(current.elements[row * cols + col]));
+        }
+        rowTargets.push(rowEntries);
+      }
+      target = this.createDestructureTargetNode("DestructureTensorPattern", {
+        shape: [...current.shape],
+        rows: rowTargets,
+      }, current);
+    } else {
+      this.error("Invalid destructuring target");
+    }
+
+    return this.wrapDestructureTarget(target, wrappers);
+  }
+
+  convertMapDestructureEntry(node) {
+    const wrappers = [];
+    let current = node;
+
+    while (current?.type === "CapturedEntry" || current?.type === "ValueOutfit") {
+      if (current.type === "CapturedEntry") {
+        wrappers.push({ type: "capture", bindingMode: current.captureMode });
+        current = current.expression;
+      } else {
+        wrappers.push({ type: "semantic", header: current.header || null });
+        current = current.expression;
+      }
+    }
+
+    if (current?.type === "Spread") {
+      const rest = this.createDestructureTargetNode("DestructureRestTarget", {
+        target: this.convertExpressionToDestructureTarget(current.expression),
+      }, current);
+      return this.wrapDestructureTarget(rest, wrappers);
+    }
+
+    const makeEntry = (sourceKey, wholeTarget, nestedTarget, sourceNode = current) =>
+      this.createDestructureTargetNode("DestructureMapEntry", {
+        sourceKey,
+        wholeTarget,
+        nestedTarget,
+      }, sourceNode);
+
+    if (current?.type === "UserIdentifier" || current?.type === "SystemIdentifier") {
+      return this.wrapDestructureTarget(
+        makeEntry(
+          current,
+          this.createDestructureTargetNode("DestructureVariableTarget", { name: current.name }, current),
+          null,
+          current,
+        ),
+        wrappers,
+      );
+    }
+
+    if (
+      current?.type === "PropertyAccess" &&
+      (current.object?.type === "UserIdentifier" || current.object?.type === "SystemIdentifier") &&
+      current.property?.type === "KeyLiteral"
+    ) {
+      return this.wrapDestructureTarget(
+        makeEntry(
+          this.createNode("String", {
+            value: current.property.name,
+            kind: "colon",
+            original: current.property.original || `:${current.property.name}`,
+          }),
+          this.createDestructureTargetNode("DestructureVariableTarget", { name: current.object.name }, current.object),
+          null,
+          current,
+        ),
+        wrappers,
+      );
+    }
+
+    if (current?.type === "MapEntry") {
+      const explicitKeyExpr = this.explicitMapKeyExpression(current.key);
+      if (explicitKeyExpr) {
+        return this.wrapDestructureTarget(
+          makeEntry(
+            explicitKeyExpr,
+            null,
+            this.convertExpressionToDestructureTarget(current.value),
+            current,
+          ),
+          wrappers,
+        );
+      }
+
+      if (current.key?.type === "UserIdentifier" || current.key?.type === "SystemIdentifier") {
+        return this.wrapDestructureTarget(
+          makeEntry(
+            current.key,
+            this.createDestructureTargetNode("DestructureVariableTarget", { name: current.key.name }, current.key),
+            this.convertExpressionToDestructureTarget(current.value),
+            current,
+          ),
+          wrappers,
+        );
+      }
+
+      if (
+        current.key?.type === "PropertyAccess" &&
+        (current.key.object?.type === "UserIdentifier" || current.key.object?.type === "SystemIdentifier") &&
+        current.key.property?.type === "KeyLiteral"
+      ) {
+        return this.wrapDestructureTarget(
+          makeEntry(
+            this.createNode("String", {
+              value: current.key.property.name,
+              kind: "colon",
+              original: current.key.property.original || `:${current.key.property.name}`,
+            }),
+            this.createDestructureTargetNode("DestructureVariableTarget", { name: current.key.object.name }, current.key.object),
+            this.convertExpressionToDestructureTarget(current.value),
+            current,
+          ),
+          wrappers,
+        );
+      }
+    }
+
+    this.error("Malformed map rename/nested syntax");
+  }
+
   consumeSemicolonSequence() {
     if (this.current.type === "SemicolonSequence") {
       // Multiple consecutive semicolons
@@ -2194,6 +2465,12 @@ class Parser {
   }
 
   parseMapConstructorEntry() {
+    let prefixCaptureMode = null;
+    if (this.isConstructorCaptureOperator(this.current.value)) {
+      prefixCaptureMode = this.captureModeFromOperator(this.current.value);
+      this.advance();
+    }
+
     let key;
     if (this.current.type === "Identifier" && (this.peek().value === "=" || this.isConstructorCaptureOperator(this.peek().value))) {
       const token = this.current;
@@ -2211,18 +2488,35 @@ class Parser {
 
     const operator = this.current.value;
     if (operator !== "=" && !this.isConstructorCaptureOperator(operator)) {
-      return key;
+      if (!prefixCaptureMode) {
+        return key;
+      }
+      return this.createNode("CapturedEntry", {
+        captureMode: prefixCaptureMode,
+        expression: key,
+        pos: key.pos,
+        original: key.original,
+      });
     }
 
     const captureMode = operator === "=" ? null : this.captureModeFromOperator(operator);
     this.advance();
     const value = this.parseExpression(0);
-    return this.createNode("MapEntry", {
+    const entry = this.createNode("MapEntry", {
       key,
       value,
       captureMode,
       pos: key.pos,
       original: key.original,
+    });
+    if (!prefixCaptureMode) {
+      return entry;
+    }
+    return this.createNode("CapturedEntry", {
+      captureMode: prefixCaptureMode,
+      expression: entry,
+      pos: entry.pos,
+      original: entry.original,
     });
   }
 
@@ -2403,7 +2697,10 @@ class Parser {
           const isIdentifierSugar =
             lhsType === "UserIdentifier" || lhsType === "SystemIdentifier";
           const isParenthesizedExpr = lhsType === "Grouping";
-          if (!isIdentifierSugar && !isParenthesizedExpr) {
+          const isDestructureRename =
+            lhsType === "PropertyAccess" ||
+            (lhsType === "Array" && Array.isArray(lhs?.elements) && lhs.elements.length === 1);
+          if (!isIdentifierSugar && !isParenthesizedExpr && !isDestructureRename) {
             this.error("Map key expressions must be parenthesized in literals: use {= (expr)=value }");
           }
         }
@@ -2659,8 +2956,12 @@ class Parser {
         );
       }
     } else if (this.current.value !== "}") {
-      const displayTree = this.parseTensorDisplayLevel(this.getTensorDisplayLevels(shape), 0, shape);
-      elements = this.flattenTensorDisplayTree(displayTree, shape);
+      if (shape.length === 2 && this.current.value === "[") {
+        elements = this.parseTensorRowArrayPattern(shape);
+      } else {
+        const displayTree = this.parseTensorDisplayLevel(this.getTensorDisplayLevels(shape), 0, shape);
+        elements = this.flattenTensorDisplayTree(displayTree, shape);
+      }
     }
 
     if (this.current.value !== "}") {
@@ -2675,6 +2976,25 @@ class Parser {
       pos: startToken.pos,
       original: startToken.original,
     });
+  }
+
+  parseTensorRowArrayPattern(shape) {
+    const [rows, cols] = shape;
+    const elements = [];
+    for (let row = 0; row < rows; row++) {
+      const rowExpr = this.parseArray();
+      if (rowExpr.type !== "Array" || rowExpr.elements.length !== cols) {
+        this.error(`Malformed tensor destructure row: expected [..] with ${cols} entries`);
+      }
+      elements.push(...rowExpr.elements);
+      if (row < rows - 1) {
+        if (this.current.value !== ",") {
+          this.error(`Tensor destructuring shape ${shape.join("x")} expects ',' between row arrays`);
+        }
+        this.advance();
+      }
+    }
+    return elements;
   }
 
   getTensorDisplayLevels(shape) {

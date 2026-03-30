@@ -4023,4 +4023,87 @@ describe("RiX Parser", () => {
       });
     });
   });
+
+  describe("Destructuring assignment", () => {
+    test("array destructuring parses explicit target nodes", () => {
+      const ast = stripMetadata(parseCode("[a, :=b, ...rest] := src;"))[0].expression;
+      expect(ast).toEqual({
+        type: "BinaryOperation",
+        operator: ":=",
+        left: {
+          type: "DestructureArrayPattern",
+          entries: [
+            { type: "DestructureVariableTarget", name: "a" },
+            {
+              type: "DestructureBindingModeTarget",
+              bindingMode: "copy",
+              target: { type: "DestructureVariableTarget", name: "b" },
+            },
+          ],
+          rest: {
+            type: "DestructureRestTarget",
+            target: { type: "DestructureVariableTarget", name: "rest" },
+          },
+        },
+        right: { type: "UserIdentifier", name: "src" },
+      });
+    });
+
+    test("map destructuring parses rename and nested entries", () => {
+      const ast = stripMetadata(parseCode("{= b[:a], [:x] = [u, v], pair[:p] = [m, n] } = src;"))[0].expression;
+      expect(ast.left.type).toBe("DestructureMapPattern");
+      expect(ast.left.entries).toEqual([
+        {
+          type: "DestructureMapEntry",
+          sourceKey: { type: "String", value: "a", kind: "colon" },
+          wholeTarget: { type: "DestructureVariableTarget", name: "b" },
+          nestedTarget: null,
+        },
+        {
+          type: "DestructureMapEntry",
+          sourceKey: { type: "String", value: "x", kind: "colon" },
+          wholeTarget: null,
+          nestedTarget: {
+            type: "DestructureArrayPattern",
+            entries: [
+              { type: "DestructureVariableTarget", name: "u" },
+              { type: "DestructureVariableTarget", name: "v" },
+            ],
+            rest: null,
+          },
+        },
+        {
+          type: "DestructureMapEntry",
+          sourceKey: { type: "String", value: "p", kind: "colon" },
+          wholeTarget: { type: "DestructureVariableTarget", name: "pair" },
+          nestedTarget: {
+            type: "DestructureArrayPattern",
+            entries: [
+              { type: "DestructureVariableTarget", name: "m" },
+              { type: "DestructureVariableTarget", name: "n" },
+            ],
+            rest: null,
+          },
+        },
+      ]);
+    });
+
+    test("tensor destructuring accepts nested row arrays", () => {
+      const ast = stripMetadata(parseCode("{:2x2: [a, b], [c, d]} = m;"))[0].expression;
+      expect(ast.left).toEqual({
+        type: "DestructureTensorPattern",
+        shape: [2, 2],
+        rows: [
+          [
+            { type: "DestructureVariableTarget", name: "a" },
+            { type: "DestructureVariableTarget", name: "b" },
+          ],
+          [
+            { type: "DestructureVariableTarget", name: "c" },
+            { type: "DestructureVariableTarget", name: "d" },
+          ],
+        ],
+      });
+    });
+  });
 });
