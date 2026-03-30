@@ -438,6 +438,7 @@ const SYMBOL_TABLE = {
   "{@": { precedence: 0, type: "brace_sigil" },
   "{#": { precedence: 0, type: "brace_sigil" },
   "{$": { precedence: 0, type: "brace_sigil" },
+  "{^": { precedence: 0, type: "brace_sigil" },
 
   // Mutation brace
   "{!": { precedence: 0, type: "brace_sigil" },
@@ -699,14 +700,17 @@ class Parser {
         } else if (token.value === "{") {
           return this.parseBraceContainer();
         } else if (token.value === "{=" || token.value === "{?" || token.value === "{;" || token.value === "{|" || token.value === "{:" || token.value === "{@" || token.value === "{#" || token.value === "{.."
+          || token.value === "{^"
           || token.value === "{$") {
           if (token.value === "{#") {
             return this.parseSystemSpecLiteral();
           }
+          if (token.value === "{^") {
+            return this.parseValueOutfit();
+          }
           return this.parseBraceSigil(token.value, token.containerName ?? null, {
             loopMax: token.loopMax,
             loopUnlimited: token.loopUnlimited === true,
-            captureMode: token.captureMode ?? null,
           });
         } else if (
           token.value === "{+" ||
@@ -735,17 +739,18 @@ class Parser {
           // @ followed by { or brace sigil = deferred block: @{; ...}, @{? ...}, @{...}
           this.advance(); // consume '@'
           const nextVal = this.current.value;
-          if (nextVal === "{" || nextVal === "{;" || nextVal === "{?" || nextVal === "{=" || nextVal === "{|" || nextVal === "{:" || nextVal === "{@" || nextVal === "{#" || nextVal === "{$" || nextVal === "{..") {
+          if (nextVal === "{" || nextVal === "{;" || nextVal === "{?" || nextVal === "{=" || nextVal === "{|" || nextVal === "{:" || nextVal === "{@" || nextVal === "{#" || nextVal === "{$" || nextVal === "{.." || nextVal === "{^") {
             let inner;
             if (nextVal === "{") {
               inner = this.parseBraceContainer();
             } else if (nextVal === "{#") {
               inner = this.parseSystemSpecLiteral();
+            } else if (nextVal === "{^") {
+              inner = this.parseValueOutfit();
             } else {
               inner = this.parseBraceSigil(nextVal, this.current.containerName ?? null, {
                 loopMax: this.current.loopMax,
                 loopUnlimited: this.current.loopUnlimited === true,
-                captureMode: this.current.captureMode ?? null,
               });
             }
             return this.createNode("DeferredBlock", {
@@ -2221,6 +2226,111 @@ class Parser {
     });
   }
 
+  parseHeaderDirectiveName() {
+    const token = this.current;
+    if (token.type !== "Identifier") {
+      this.error("Expected identifier in header");
+    }
+    const name = token.original.trim();
+    if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(name)) {
+      this.error("Header names must start with a letter and contain only letters, digits, or underscores");
+    }
+    this.advance();
+    return name;
+  }
+
+  parseSemanticHeader() {
+    if (this.current.value !== "/") {
+      return null;
+    }
+
+    const startToken = this.current;
+    this.advance();
+
+    let captureMode = null;
+    let name = null;
+    let typeName = null;
+    const traits = [];
+    let order = 0;
+
+    while (this.current.value !== "/" && this.current.type !== "End") {
+      if (this.isConstructorCaptureOperator(this.current.value)) {
+        if (captureMode !== null) {
+          this.error("Header may only specify one capture mode");
+        }
+        captureMode = this.captureModeFromOperator(this.current.value);
+        this.advance();
+        continue;
+      }
+
+      if (this.current.value === "#") {
+        this.advance();
+        if (name !== null) {
+          this.error("Header may only specify one name");
+        }
+        name = this.parseHeaderDirectiveName();
+        continue;
+      }
+
+      if (this.current.value === "::") {
+        this.advance();
+        if (typeName !== null) {
+          this.error("Header may only specify one semantic type");
+        }
+        typeName = this.parseHeaderDirectiveName();
+        continue;
+      }
+
+      if (this.current.value === ":") {
+        this.advance();
+        const traitName = this.parseHeaderDirectiveName();
+        traits.push({
+          type: "HeaderTrait",
+          name: traitName,
+          checkMode: null,
+          order,
+        });
+        order += 1;
+        continue;
+      }
+
+      this.error("Invalid directive in /.../ header");
+    }
+
+    if (this.current.value !== "/") {
+      this.error("Unterminated /.../ header");
+    }
+    this.advance();
+
+    return this.createNode("SemanticHeader", {
+      captureMode,
+      name,
+      typeName,
+      traits,
+      pos: startToken.pos,
+      original: startToken.original,
+    });
+  }
+
+  parseValueOutfit() {
+    const startToken = this.current;
+    this.advance(); // consume {^
+    const header = this.parseSemanticHeader();
+    const expression = this.parseExpression(0);
+
+    if (this.current.value !== "}") {
+      this.error("Expected closing brace for value outfit");
+    }
+    this.advance();
+
+    return this.createNode("ValueOutfit", {
+      header,
+      expression,
+      pos: startToken.pos,
+      original: startToken.original,
+    });
+  }
+
   // Parse brace sigil containers: {= map, {? case, {; block, {| set, {: tuple, {@ loop
   parseBraceSigil(sigil, containerName = null, options = {}) {
     const startToken = this.current;
@@ -2239,6 +2349,7 @@ class Parser {
       "{:": "TupleContainer",
       "{@": "LoopContainer",
       "{$": "BlockContainer",
+      "{^": "ValueOutfit",
     };
 
     const nodeType = sigilTypeMap[sigil];
@@ -2253,6 +2364,8 @@ class Parser {
     const primaryCloser = closers[0];
     const isCloser = (val) => closers.includes(val);
     const separator = isTemporal ? ";" : ",";
+
+    const header = sigil === "{=" || sigil === "{|" || sigil === "{:" || sigil === "{.." ? this.parseSemanticHeader() : null;
 
     const imports =
       (sigil === "{;" || sigil === "{@" || sigil === "{$") && this.startsImportHeader()
@@ -2329,7 +2442,7 @@ class Parser {
       ...(containerName ? { name: containerName } : {}),
       ...(sigil === "{@" && options.loopMax !== undefined ? { maxIterations: options.loopMax } : {}),
       ...(sigil === "{@" && options.loopUnlimited ? { unlimited: true } : {}),
-      ...(options.captureMode ? { defaultCaptureMode: this.captureModeFromOperator(options.captureMode) } : {}),
+      ...(header ? { header } : {}),
       ...(imports.length > 0 ? { imports: imports } : {}),
       elements: elements,
       pos: startToken.pos,
@@ -2537,6 +2650,7 @@ class Parser {
 
     const size = shape.reduce((product, dim) => product * dim, 1);
     let elements = [];
+    const header = this.parseSemanticHeader();
 
     if (size === 0) {
       if (this.current.value !== "}") {
@@ -2556,7 +2670,7 @@ class Parser {
 
     return this.createNode("TensorLiteral", {
       shape,
-      ...(startToken.captureMode ? { defaultCaptureMode: this.captureModeFromOperator(startToken.captureMode) } : {}),
+      ...(header ? { header } : {}),
       elements,
       pos: startToken.pos,
       original: startToken.original,

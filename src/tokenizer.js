@@ -111,6 +111,7 @@ const symbols = [
   ".=",
   // Mutation prefix
   "{!",
+  "#",
   "%",
   ",",
   ";",
@@ -827,7 +828,6 @@ function tryMatchBrace(input, position) {
 
   const isWhitespace = (c) => c === " " || c === "\t" || c === "\n" || c === "\r" || c === undefined;
   const ch = input[position + 1]; // char immediately after {
-  const captureOps = ["~~=", "::=", ":=", "~=", "=="];
 
   const makeAdvancedConstructorToken = (value, start, end, extras = {}) => ({
     type: "Symbol",
@@ -844,46 +844,6 @@ function tryMatchBrace(input, position) {
       throw new Error(`Brace array '{..' must be followed by a space or '}' at line ${line}:${col}`);
     }
     return makeAdvancedConstructorToken("{..", position, position + 3);
-  }
-
-  for (const op of captureOps) {
-    if (!input.slice(position + 1).startsWith(op)) continue;
-
-    let cursor = position + 1 + op.length;
-    let value = "{=";
-    const extras = { captureMode: op };
-
-    if (input.slice(cursor).startsWith("..")) {
-      value = "{..";
-      cursor += 2;
-    } else if (input[cursor] === "|") {
-      value = "{|";
-      cursor += 1;
-    } else if (input[cursor] === ":") {
-      value = "{:";
-      cursor += 1;
-
-      if (/[0-9]/.test(input[cursor] || "")) {
-        const shapeStart = cursor;
-        while (cursor < input.length && /[0-9x]/.test(input[cursor])) {
-          cursor++;
-        }
-        if (input[cursor] !== ":") {
-          const { line, col } = posToLineCol(input, position);
-          throw new Error(`Tensor constructor header must end with ':' at line ${line}:${col}`);
-        }
-        extras.containerName = input.slice(shapeStart, cursor).toLowerCase();
-        cursor += 1;
-      }
-    }
-
-    const after = input[cursor];
-    if (!isWhitespace(after) && after !== "}") {
-      const { line, col } = posToLineCol(input, position);
-      throw new Error(`Constructor header '{${op}' must be followed by a valid container marker and then a space or '}' at line ${line}:${col}`);
-    }
-
-    return makeAdvancedConstructorToken(value, position, cursor, extras);
   }
 
   // 1. Operator brace detection (longest sequences first)
@@ -907,7 +867,7 @@ function tryMatchBrace(input, position) {
   }
 
   // 2. Sigil container detection
-  const sigilChars = new Set(["@", ";", "|", ":", "=", "?", "$", "#"]);
+  const sigilChars = new Set(["@", ";", "|", ":", "=", "?", "$", "#", "^"]);
   if (sigilChars.has(ch)) {
     const sigil = ch;
     const after = input[position + 2];
@@ -920,7 +880,7 @@ function tryMatchBrace(input, position) {
     }
 
     // 2a. Space immediately → anonymous container
-    if (isWhitespace(after)) {
+    if (isWhitespace(after) || after === "/") {
       return {
         type: "Symbol",
         original: "{" + sigil,
@@ -1000,7 +960,7 @@ function tryMatchBrace(input, position) {
   // 5. All other cases: error (missing space after {)
   const { line, col } = posToLineCol(input, position);
   throw new Error(
-    `'{' must be followed by a space, a sigil (@;|:=?$#), or an operator (+, *, &&, ||, \\/, /\\, ++, <<, >>) at line ${line}:${col}`
+    `'{' must be followed by a space, a sigil (@;|:=?$#^), or an operator (+, *, &&, ||, \\/, /\\, ++, <<, >>) at line ${line}:${col}`
   );
 }
 
@@ -1175,6 +1135,14 @@ function finalizeLoopHeader(input, position, end, options) {
 
 function tryMatchSymbol(input, position) {
   const remaining = input.slice(position);
+  if (/^\/(?:==|:=|~=|::=|~~=)\s*\/(?=[\s}])/.test(remaining)) {
+    return {
+      type: "Symbol",
+      original: "/",
+      value: "/",
+      pos: [position, position, position + 1],
+    };
+  }
 
   // Try to match symbols using maximal munch (longest first)
   for (const symbol of symbols) {

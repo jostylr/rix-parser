@@ -3984,10 +3984,10 @@ describe("RiX Parser", () => {
       expect(ast.elements).toHaveLength(3);
     });
 
-    test("{::= a = x, b == y } records constructor and entry capture modes", () => {
-      const ast = stripMetadata(parseCode("{::= a = x, b == y };"))[0].expression;
+    test("{= /::=/ a = x, b == y } records constructor and entry capture modes", () => {
+      const ast = stripMetadata(parseCode("{= /::=/ a = x, b == y };"))[0].expression;
       expect(ast.type).toBe("MapContainer");
-      expect(ast.defaultCaptureMode).toBe("deep_copy");
+      expect(ast.header.captureMode).toBe("deep_copy");
       expect(ast.elements[0]).toEqual({
         type: "MapEntry",
         key: { type: "UserIdentifier", name: "a" },
@@ -4002,11 +4002,25 @@ describe("RiX Parser", () => {
       });
     });
 
-    test("{::=:2x2: a, b; c, d } parses as TensorLiteral with capture mode", () => {
-      const ast = stripMetadata(parseCode("{::=:2x2: a, b; c, d };"))[0].expression;
+    test("{:2x2: /::=/ a, b; c, d } parses as TensorLiteral with capture mode", () => {
+      const ast = stripMetadata(parseCode("{:2x2: /::=/ a, b; c, d };"))[0].expression;
       expect(ast.type).toBe("TensorLiteral");
-      expect(ast.defaultCaptureMode).toBe("deep_copy");
+      expect(ast.header.captureMode).toBe("deep_copy");
       expect(ast.shape).toEqual([2, 2]);
+    });
+
+    test("{^ /#x ::Length :meters/ 7 } parses as ValueOutfit with header", () => {
+      const ast = stripMetadata(parseCode("{^ /#x ::Length :meters/ 7 };"))[0].expression;
+      expect(ast.type).toBe("ValueOutfit");
+      expect(ast.header).toEqual({
+        type: "SemanticHeader",
+        captureMode: null,
+        name: "x",
+        typeName: "Length",
+        traits: [
+          { type: "HeaderTrait", name: "meters", checkMode: null, order: 0 },
+        ],
+      });
     });
   });
 });
