@@ -4105,5 +4105,71 @@ describe("RiX Parser", () => {
         ],
       });
     });
+
+    test("indexed destructuring parses selector targets", () => {
+      const ast = stripMetadata(parseCode("[a[1:3], b[2], [2:4] = [x, y]] = src;"))[0].expression;
+      expect(ast.left).toEqual({
+        type: "DestructureArrayPattern",
+        entries: [
+          {
+            type: "DestructureIndexedTarget",
+            wholeTarget: { type: "DestructureVariableTarget", name: "a" },
+            specs: [
+              {
+                type: "SliceSpec",
+                start: { type: "Number", value: "1" },
+                end: { type: "Number", value: "3" },
+              },
+            ],
+            nestedTarget: null,
+          },
+          {
+            type: "DestructureIndexedTarget",
+            wholeTarget: { type: "DestructureVariableTarget", name: "b" },
+            specs: [{ type: "Number", value: "2" }],
+            nestedTarget: null,
+          },
+          {
+            type: "DestructureIndexedTarget",
+            wholeTarget: null,
+            specs: [
+              {
+                type: "SliceSpec",
+                start: { type: "Number", value: "2" },
+                end: { type: "Number", value: "4" },
+              },
+            ],
+            nestedTarget: {
+              type: "DestructureArrayPattern",
+              entries: [
+                { type: "DestructureVariableTarget", name: "x" },
+                { type: "DestructureVariableTarget", name: "y" },
+              ],
+              rest: null,
+            },
+          },
+        ],
+        rest: null,
+      });
+    });
+
+    test("tensor selector alias parses through destructuring instead of tensor literal rules", () => {
+      const ast = stripMetadata(parseCode("{=:2x3: row2[2, 1:3]} = src;"))[0].expression;
+      expect(ast.left).toEqual({
+        type: "DestructureArrayPattern",
+        entries: [
+          {
+            type: "DestructureIndexedTarget",
+            wholeTarget: { type: "DestructureVariableTarget", name: "row2" },
+            specs: [
+              { type: "Number", value: "2" },
+              { type: "Number", value: "1:3" },
+            ],
+            nestedTarget: null,
+          },
+        ],
+        rest: null,
+      });
+    });
   });
 });

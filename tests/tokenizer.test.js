@@ -2429,6 +2429,19 @@ describe("Math Oracle Tokenizer", () => {
       expect(tokens.map((t) => t.value)).toEqual(["{:", "}", null]);
     });
 
+    test("{=.. produces the brace-array alias token", () => {
+      const tokens = tokenize("{=.. a[1:2] }");
+      const brace = tokens.find((t) => t.value === "{..");
+      expect(brace).toBeDefined();
+    });
+
+    test("{=:2x3: produces the tensor alias token", () => {
+      const tokens = tokenize("{=:2x3: a[2,1:3] }");
+      const brace = tokens.find((t) => t.value === "{:");
+      expect(brace).toBeDefined();
+      expect(brace.containerName).toBe("2x3");
+    });
+
     test("{# with space produces anonymous {# token", () => {
       const tokens = tokenize("{# p = x + 1 }");
       const brace = tokens.find((t) => t.value === "{#");

@@ -711,6 +711,7 @@ class Parser {
           return this.parseBraceSigil(token.value, token.containerName ?? null, {
             loopMax: token.loopMax,
             loopUnlimited: token.loopUnlimited === true,
+            destructureAlias: token.destructureAlias === true,
           });
         } else if (
           token.value === "{+" ||
@@ -751,6 +752,7 @@ class Parser {
               inner = this.parseBraceSigil(nextVal, this.current.containerName ?? null, {
                 loopMax: this.current.loopMax,
                 loopUnlimited: this.current.loopUnlimited === true,
+                destructureAlias: this.current.destructureAlias === true,
               });
             }
             return this.createNode("DeferredBlock", {
@@ -2114,13 +2116,79 @@ class Parser {
     return null;
   }
 
+  normalizeStandaloneIndexSpec(node) {
+    if (node?.type === "BinaryOperation" && node.operator === ":") {
+      return this.createNode("SliceSpec", {
+        start: node.left,
+        end: node.right,
+        pos: node.pos,
+        original: node.original,
+      });
+    }
+    if (node?.type === "Number" && typeof node.value === "string" && node.value.includes(":")) {
+      const parts = node.value.split(":");
+      if (parts.length === 2) {
+        return this.createNode("SliceSpec", {
+          start: this.createNode("Number", { value: parts[0], original: parts[0] }),
+          end: this.createNode("Number", { value: parts[1], original: parts[1] }),
+          pos: node.pos,
+          original: node.original,
+        });
+      }
+    }
+    return node;
+  }
+
+  buildIndexedDestructureTarget(selectorNode, nestedTarget = null, options = {}) {
+    if (selectorNode?.type === "Grouping" && selectorNode.expression) {
+      return this.buildIndexedDestructureTarget(selectorNode.expression, nestedTarget, options);
+    }
+
+    if (selectorNode?.type === "PropertyAccess") {
+      const property =
+        selectorNode.property?.type === "KeyLiteral"
+          ? this.createNode("String", {
+            value: selectorNode.property.name,
+            kind: "colon",
+            original: selectorNode.property.original || `:${selectorNode.property.name}`,
+          })
+          : this.normalizeStandaloneIndexSpec(selectorNode.property);
+      return this.createDestructureTargetNode("DestructureIndexedTarget", {
+        wholeTarget: this.convertExpressionToDestructureTarget(selectorNode.object),
+        specs: [property],
+        nestedTarget,
+      }, selectorNode);
+    }
+
+    if (selectorNode?.type === "BracketIndex") {
+      return this.createDestructureTargetNode("DestructureIndexedTarget", {
+        wholeTarget: this.convertExpressionToDestructureTarget(selectorNode.object),
+        specs: selectorNode.specs,
+        nestedTarget,
+      }, selectorNode);
+    }
+
+    const explicitKeyExpr = options.allowBareArraySelector ? this.explicitMapKeyExpression(selectorNode) : null;
+    if (explicitKeyExpr) {
+      return this.createDestructureTargetNode("DestructureIndexedTarget", {
+        wholeTarget: null,
+        specs: [this.normalizeStandaloneIndexSpec(explicitKeyExpr)],
+        nestedTarget,
+      }, selectorNode);
+    }
+
+    return null;
+  }
+
   convertExpressionToDestructureTarget(node) {
     const wrappers = [];
     let current = node;
 
-    while (current?.type === "CapturedEntry" || current?.type === "ValueOutfit") {
+    while (current?.type === "CapturedEntry" || current?.type === "ValueOutfit" || current?.type === "Grouping") {
       if (current.type === "CapturedEntry") {
         wrappers.push({ type: "capture", bindingMode: current.captureMode });
+        current = current.expression;
+      } else if (current.type === "Grouping") {
         current = current.expression;
       } else {
         wrappers.push({ type: "semantic", header: current.header || null });
@@ -2130,7 +2198,18 @@ class Parser {
 
     let target;
 
-    if (current?.type === "UserIdentifier" || current?.type === "SystemIdentifier") {
+    if (current?.type === "BinaryOperation" && current.operator === "=") {
+      const indexed = this.buildIndexedDestructureTarget(
+        current.left,
+        this.convertExpressionToDestructureTarget(current.right),
+        { allowBareArraySelector: true },
+      );
+      if (indexed) {
+        target = indexed;
+      } else {
+        this.error("Invalid destructuring target");
+      }
+    } else if (current?.type === "UserIdentifier" || current?.type === "SystemIdentifier") {
       target = this.createDestructureTargetNode("DestructureVariableTarget", {
         name: current.name,
       }, current);
@@ -2138,7 +2217,18 @@ class Parser {
       target = this.createDestructureTargetNode("DestructureRestTarget", {
         target: this.convertExpressionToDestructureTarget(current.expression),
       }, current);
-    } else if (current?.type === "Array" || current?.type === "ArrayContainer") {
+    } else {
+      const indexed = this.buildIndexedDestructureTarget(current, null);
+      if (indexed) {
+        target = indexed;
+      }
+    }
+
+    if (target) {
+      return this.wrapDestructureTarget(target, wrappers);
+    }
+
+    if (current?.type === "Array" || current?.type === "ArrayContainer") {
       const elements = current.elements || [];
       const entries = [];
       let rest = null;
@@ -2630,9 +2720,15 @@ class Parser {
     const startToken = this.current;
     this.advance(); // consume the sigil token (e.g., '{=')
 
-    if (sigil === "{:" && containerName && /^\d+(?:x\d+)*$/.test(containerName)) {
+    const isTensorShapeSigil =
+      sigil === "{:" && containerName && /^\d+(?:x\d+)*$/.test(containerName);
+
+    if (isTensorShapeSigil && !options.destructureAlias) {
       return this.parseTensorLiteral(startToken, containerName);
     }
+
+    const effectiveSigil =
+      isTensorShapeSigil && options.destructureAlias ? "{.." : sigil;
 
     const sigilTypeMap = {
       "{..": "ArrayContainer",
@@ -2646,30 +2742,36 @@ class Parser {
       "{^": "ValueOutfit",
     };
 
-    const nodeType = sigilTypeMap[sigil];
+    const nodeType = sigilTypeMap[effectiveSigil];
 
     // Determine separator: temporal (;) vs spatial (,)
     const temporalSigils = new Set(["{?", "{;", "{@", "{$"]);
-    const isTemporal = temporalSigils.has(sigil);
+    const isTemporal = temporalSigils.has(effectiveSigil);
     const closerMap = {
       "{|": ["|}", "}"],
     };
-    const closers = closerMap[sigil] || ["}"];
+    const closers = closerMap[effectiveSigil] || ["}"];
     const primaryCloser = closers[0];
     const isCloser = (val) => closers.includes(val);
     const separator = isTemporal ? ";" : ",";
 
-    const header = sigil === "{=" || sigil === "{|" || sigil === "{:" || sigil === "{.." ? this.parseSemanticHeader() : null;
+    const header =
+      effectiveSigil === "{=" ||
+      effectiveSigil === "{|" ||
+      effectiveSigil === "{:" ||
+      effectiveSigil === "{.."
+        ? this.parseSemanticHeader()
+        : null;
 
     const imports =
-      (sigil === "{;" || sigil === "{@" || sigil === "{$") && this.startsImportHeader()
+      (effectiveSigil === "{;" || effectiveSigil === "{@" || effectiveSigil === "{$") && this.startsImportHeader()
         ? this.parseImportHeader()
         : [];
     const elements = [];
     const parseElement =
-      sigil === "{="
+      effectiveSigil === "{="
         ? () => this.parseMapConstructorEntry()
-        : sigil === "{|" || sigil === "{:" || sigil === "{.."
+        : effectiveSigil === "{|" || effectiveSigil === "{:" || effectiveSigil === "{.."
           ? () => this.parseCapturedConstructorElement()
           : () => this.parseExpression(0);
 
@@ -2683,7 +2785,7 @@ class Parser {
 
         const element = parseElement();
         if (
-          sigil === "{=" &&
+          effectiveSigil === "{=" &&
           element &&
           (element.type === "BinaryOperation" || element.type === "MapEntry") &&
           (
@@ -2736,9 +2838,12 @@ class Parser {
     this.advance(); // consume closer
     return this.createNode(nodeType, {
       sigil: sigil,
-      ...(containerName ? { name: containerName } : {}),
-      ...(sigil === "{@" && options.loopMax !== undefined ? { maxIterations: options.loopMax } : {}),
-      ...(sigil === "{@" && options.loopUnlimited ? { unlimited: true } : {}),
+      ...(containerName && !options.destructureAlias ? { name: containerName } : {}),
+      ...(isTensorShapeSigil && options.destructureAlias
+        ? { tensorShape: containerName.split("x").map((part) => Number(part)) }
+        : {}),
+      ...(effectiveSigil === "{@" && options.loopMax !== undefined ? { maxIterations: options.loopMax } : {}),
+      ...(effectiveSigil === "{@" && options.loopUnlimited ? { unlimited: true } : {}),
       ...(header ? { header } : {}),
       ...(imports.length > 0 ? { imports: imports } : {}),
       elements: elements,

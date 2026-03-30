@@ -837,6 +837,37 @@ function tryMatchBrace(input, position) {
     ...extras,
   });
 
+  if (input.slice(position + 1).startsWith("=..")) {
+    const after = input[position + 4];
+    if (!isWhitespace(after) && after !== "}") {
+      const { line, col } = posToLineCol(input, position);
+      throw new Error(`Brace array alias '{=..' must be followed by a space or '}' at line ${line}:${col}`);
+    }
+    return makeAdvancedConstructorToken("{..", position, position + 4, {
+      destructureAlias: true,
+    });
+  }
+
+  if (input.slice(position + 1).startsWith("=:")) {
+    let cursor = position + 3; // after "{=:"
+    let name = "";
+    while (cursor < input.length && /[0-9x]/i.test(input[cursor])) {
+      name += input[cursor];
+      cursor++;
+    }
+    if (name.length > 0 && input[cursor] === ":") {
+      const after = input[cursor + 1];
+      if (!isWhitespace(after) && after !== "/" && after !== "}") {
+        const { line, col } = posToLineCol(input, position);
+        throw new Error(`Brace tensor alias '{=:${name}:' must be followed by a space, header, or '}' at line ${line}:${col}`);
+      }
+      return makeAdvancedConstructorToken("{:", position, cursor + 1, {
+        containerName: name.toLowerCase(),
+        destructureAlias: true,
+      });
+    }
+  }
+
   if (input.slice(position + 1).startsWith("..")) {
     const after = input[position + 3];
     if (!isWhitespace(after) && after !== "}") {
