@@ -369,6 +369,8 @@ const SYMBOL_TABLE = {
     associativity: "right",
     type: "infix",
   },
+  "?-": { precedence: PRECEDENCE.ARROW, associativity: "right", type: "infix" },
+  "?!-": { precedence: PRECEDENCE.ARROW, associativity: "right", type: "infix" },
 
   // Membership operator (also used for function parameter conditions)
   "?": {
@@ -900,6 +902,47 @@ class Parser {
       });
     }
 
+    if (operator.value === "?-" || operator.value === "?!-") {
+      this.advance(); // consume ?- / ?!-
+      const prep = this.parseExpression(PRECEDENCE.ARROW + 1);
+      if (!prep || prep.type !== "Array") {
+        this.error("Function prep phase must be written as an array literal: ?- [ ... ]");
+      }
+      if (this.current.value !== "->") {
+        this.error("Expected '->' after function prep phase");
+      }
+      this.advance(); // consume ->
+      const body = this.parseExpression(PRECEDENCE.ARROW);
+      const prepStrict = operator.value === "?!-";
+
+      const namedSig = this.extractNamedFunctionSignature(left);
+      if (namedSig) {
+        return this.createNode("FunctionDefinition", {
+          name: namedSig.funcName,
+          parameters: namedSig.parameters,
+          prep,
+          prepStrict,
+          body,
+          pos: left.pos,
+          original: left.original + operator.original,
+        });
+      }
+
+      const lambdaParameters = this.extractLambdaParameters(left);
+      if (lambdaParameters) {
+        return this.createNode("FunctionLambda", {
+          parameters: lambdaParameters,
+          prep,
+          prepStrict,
+          body,
+          pos: left.pos,
+          original: left.original + operator.original,
+        });
+      }
+
+      this.error("Prep phase can only be attached to a function definition or lambda");
+    }
+
     this.advance();
 
     let rightPrec = symbolInfo.precedence;
@@ -943,44 +986,18 @@ class Parser {
 
       // Extract parameters if left side is a function call syntax
       let funcName = left;
-      let parameters = { positional: [], keyword: [], metadata: {} };
-
-      if (left.type === "FunctionCall") {
-        funcName = left.function;
-        // Convert function call arguments to parameter definitions
-        parameters = this.convertArgsToParams(left.arguments);
-      } else if (left.type === "ImplicitMultiplication") {
-        // lowercase f(x) :-> expr — treat as function definition
-        // left.left is the function name identifier, left.right is the Grouping/Tuple with params
-        funcName = left.left;
-        parameters = { positional: [], keyword: [], conditionals: [], metadata: {} };
-        const paramExpr = left.right;
-        if (paramExpr.type === "Grouping" && paramExpr.expression) {
-          if (paramExpr.expression.type === "ParameterList") {
-            parameters = paramExpr.expression.parameters;
-          } else if (paramExpr.expression.type === "UserIdentifier") {
-            parameters.positional.push({ name: paramExpr.expression.name, defaultValue: null });
-          } else if (paramExpr.expression.type === "BinaryOperation" && paramExpr.expression.operator === "?") {
-            const paramName = paramExpr.expression.left.name || paramExpr.expression.left.value;
-            parameters.positional.push({ name: paramName, defaultValue: null });
-            parameters.conditionals = parameters.conditionals || [];
-            parameters.conditionals.push(paramExpr.expression.right);
-          }
-        } else if (paramExpr.type === "Tuple") {
-          for (const el of paramExpr.elements) {
-            const result = this.parseParameterFromArg(el, false);
-            parameters.positional.push(result.param);
-            if (result.condition) {
-              parameters.conditionals = parameters.conditionals || [];
-              parameters.conditionals.push(result.condition);
-            }
-          }
-        }
+      let parameters = { positional: [], keyword: [], conditionals: [], metadata: {} };
+      const namedSig = this.extractNamedFunctionSignature(left);
+      if (namedSig) {
+        funcName = namedSig.funcName;
+        parameters = namedSig.parameters;
       }
 
       return this.createNode("FunctionDefinition", {
         name: funcName,
         parameters: parameters,
+        prep: null,
+        prepStrict: false,
         body: right,
         pos: left.pos,
         original: left.original + operator.original,
@@ -1102,83 +1119,34 @@ class Parser {
       ) {
         return this.createNode("FunctionLambda", {
           parameters: left.expression.parameters,
+          prep: null,
+          prepStrict: false,
           body: right,
-          pos: left.pos,
-          original: left.original + operator.original,
-        });
-      } else if (left.type === "Grouping" && left.expression) {
-        // Handle single-parameter cases: (x) -> expr, (x ? cond) -> expr,
-        // (x ?= holeDefault) -> expr
-        let parameters = {
-          positional: [],
-          keyword: [],
-          conditionals: [],
-          metadata: {},
-        };
-
-        const result = this.parseParameterFromArg(left.expression, false);
-        if (result.param.name) {
-          parameters.positional.push(result.param);
-          if (result.condition) {
-            parameters.conditionals.push(result.condition);
-          }
-        }
-
-        return this.createNode("FunctionLambda", {
-          parameters: parameters,
-          body: right,
-          pos: left.pos,
-          original: left.original + operator.original,
-        });
-      } else if (left.type === "Tuple") {
-        // Handle multiple parameters parsed directly as Tuple: (a, b) -> expr
-        let parameters = {
-          positional: [],
-          keyword: [],
-          conditionals: [],
-          metadata: {},
-        };
-
-        for (const element of left.elements) {
-          const result = this.parseParameterFromArg(element, false);
-          if (result.param.name) {
-            parameters.positional.push(result.param);
-            if (result.condition) {
-              parameters.conditionals.push(result.condition);
-            }
-          }
-        }
-
-        return this.createNode("FunctionLambda", {
-          parameters: parameters,
-          body: right,
-          pos: left.pos,
-          original: left.original + operator.original,
-        });
-      } else if (left.type === "UserIdentifier") {
-        // Handle unparenthesized single parameter: x -> expr
-        let parameters = {
-          positional: [{ name: left.name, defaultValue: null }],
-          keyword: [],
-          conditionals: [],
-          metadata: {},
-        };
-        return this.createNode("FunctionLambda", {
-          parameters: parameters,
-          body: right,
-          pos: left.pos,
-          original: left.original + operator.original,
-        });
-      } else {
-        // Regular binary operation
-        return this.createNode("BinaryOperation", {
-          operator: operator.value,
-          left: left,
-          right: right,
           pos: left.pos,
           original: left.original + operator.original,
         });
       }
+
+      const lambdaParameters = this.extractLambdaParameters(left);
+      if (lambdaParameters) {
+        return this.createNode("FunctionLambda", {
+          parameters: lambdaParameters,
+          prep: null,
+          prepStrict: false,
+          body: right,
+          pos: left.pos,
+          original: left.original + operator.original,
+        });
+      }
+
+      // Regular binary operation
+      return this.createNode("BinaryOperation", {
+        operator: operator.value,
+        left: left,
+        right: right,
+        pos: left.pos,
+        original: left.original + operator.original,
+      });
     } else if (operator.value === "|>") {
       // Simple pipe operator
       right = this.parseExpression(rightPrec);
@@ -4108,6 +4076,102 @@ class Parser {
     }
 
     return params;
+  }
+
+  extractNamedFunctionSignature(left) {
+    let funcName = left;
+    let parameters = { positional: [], keyword: [], conditionals: [], metadata: {} };
+
+    if (left.type === "FunctionCall") {
+      funcName = left.function;
+      parameters = this.convertArgsToParams(left.arguments);
+      return { funcName, parameters };
+    }
+
+    if (left.type === "ImplicitMultiplication") {
+      funcName = left.left;
+      parameters = { positional: [], keyword: [], conditionals: [], metadata: {} };
+      const paramExpr = left.right;
+      if (paramExpr.type === "Grouping" && paramExpr.expression) {
+        if (paramExpr.expression.type === "ParameterList") {
+          parameters = paramExpr.expression.parameters;
+        } else if (paramExpr.expression.type === "UserIdentifier") {
+          parameters.positional.push({ name: paramExpr.expression.name, defaultValue: null });
+        } else if (paramExpr.expression.type === "BinaryOperation" && paramExpr.expression.operator === "?") {
+          const paramName = paramExpr.expression.left.name || paramExpr.expression.left.value;
+          parameters.positional.push({ name: paramName, defaultValue: null });
+          parameters.conditionals.push(paramExpr.expression.right);
+        }
+      } else if (paramExpr.type === "Tuple") {
+        for (const el of paramExpr.elements) {
+          const result = this.parseParameterFromArg(el, false);
+          parameters.positional.push(result.param);
+          if (result.condition) {
+            parameters.conditionals.push(result.condition);
+          }
+        }
+      }
+      return { funcName, parameters };
+    }
+
+    return null;
+  }
+
+  extractLambdaParameters(left) {
+    if (
+      left.type === "Grouping" &&
+      left.expression &&
+      left.expression.type === "ParameterList"
+    ) {
+      return left.expression.parameters;
+    }
+
+    if (left.type === "Grouping" && left.expression) {
+      const parameters = {
+        positional: [],
+        keyword: [],
+        conditionals: [],
+        metadata: {},
+      };
+      const result = this.parseParameterFromArg(left.expression, false);
+      if (result.param.name) {
+        parameters.positional.push(result.param);
+        if (result.condition) {
+          parameters.conditionals.push(result.condition);
+        }
+      }
+      return parameters;
+    }
+
+    if (left.type === "Tuple") {
+      const parameters = {
+        positional: [],
+        keyword: [],
+        conditionals: [],
+        metadata: {},
+      };
+      for (const element of left.elements) {
+        const result = this.parseParameterFromArg(element, false);
+        if (result.param.name) {
+          parameters.positional.push(result.param);
+          if (result.condition) {
+            parameters.conditionals.push(result.condition);
+          }
+        }
+      }
+      return parameters;
+    }
+
+    if (left.type === "UserIdentifier") {
+      return {
+        positional: [{ name: left.name, defaultValue: null }],
+        keyword: [],
+        conditionals: [],
+        metadata: {},
+      };
+    }
+
+    return null;
   }
 
   parseEmbeddedLanguage(token) {

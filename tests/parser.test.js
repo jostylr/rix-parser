@@ -54,6 +54,8 @@ function stripMetadata(obj) {
     const { pos, original, sigil, ...rest } = obj;
     const result = {};
     for (const [key, value] of Object.entries(rest)) {
+      if (key === "prep" && value === null) continue;
+      if (key === "prepStrict" && value === false) continue;
       result[key] = stripMetadata(value);
     }
     return result;
@@ -437,6 +439,96 @@ describe("RiX Parser", () => {
                 right: { type: "Number", value: "1" },
               },
             },
+          },
+        },
+      ]);
+    });
+
+    test("lambda prep phase parses with soft mode", () => {
+      const ast = parseCode("(x, y) ?- [sum = x + y, sum > 0] -> sum;");
+      expect(stripMetadata(ast)).toEqual([
+        {
+          type: "Statement",
+          expression: {
+            type: "FunctionLambda",
+            parameters: {
+              positional: [
+                { name: "x", defaultValue: null },
+                { name: "y", defaultValue: null },
+              ],
+              keyword: [],
+              conditionals: [],
+              metadata: {},
+            },
+            prep: {
+              type: "Array",
+              elements: [
+                {
+                  type: "BinaryOperation",
+                  operator: "=",
+                  left: { type: "UserIdentifier", name: "sum" },
+                  right: {
+                    type: "BinaryOperation",
+                    operator: "+",
+                    left: { type: "UserIdentifier", name: "x" },
+                    right: { type: "UserIdentifier", name: "y" },
+                  },
+                },
+                {
+                  type: "BinaryOperation",
+                  operator: ">",
+                  left: { type: "UserIdentifier", name: "sum" },
+                  right: { type: "Number", value: "0" },
+                },
+              ],
+            },
+            body: { type: "UserIdentifier", name: "sum" },
+          },
+        },
+      ]);
+    });
+
+    test("named function prep phase parses with strict mode", () => {
+      const ast = parseCode("F(x, y) ?!- [sum = x + y, sum > 0] -> sum;");
+      expect(stripMetadata(ast)).toEqual([
+        {
+          type: "Statement",
+          expression: {
+            type: "FunctionDefinition",
+            name: { type: "SystemIdentifier", name: "F", systemInfo: { type: "identifier" } },
+            parameters: {
+              positional: [
+                { name: "x", defaultValue: null },
+                { name: "y", defaultValue: null },
+              ],
+              keyword: [],
+              conditionals: [],
+              metadata: {},
+            },
+            prep: {
+              type: "Array",
+              elements: [
+                {
+                  type: "BinaryOperation",
+                  operator: "=",
+                  left: { type: "UserIdentifier", name: "sum" },
+                  right: {
+                    type: "BinaryOperation",
+                    operator: "+",
+                    left: { type: "UserIdentifier", name: "x" },
+                    right: { type: "UserIdentifier", name: "y" },
+                  },
+                },
+                {
+                  type: "BinaryOperation",
+                  operator: ">",
+                  left: { type: "UserIdentifier", name: "sum" },
+                  right: { type: "Number", value: "0" },
+                },
+              ],
+            },
+            prepStrict: true,
+            body: { type: "UserIdentifier", name: "sum" },
           },
         },
       ]);

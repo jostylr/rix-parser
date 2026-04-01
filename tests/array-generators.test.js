@@ -29,6 +29,8 @@ function stripMetadata(obj) {
     const cleaned = {};
     for (const [key, value] of Object.entries(obj)) {
       if (key !== 'pos' && key !== 'original') {
+        if (key === 'prep' && value === null) continue;
+        if (key === 'prepStrict' && value === false) continue;
         cleaned[key] = stripMetadata(value);
       }
     }
