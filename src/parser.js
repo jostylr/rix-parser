@@ -364,6 +364,11 @@ const SYMBOL_TABLE = {
     associativity: "right",
     type: "infix",
   },
+  "^=>": {
+    precedence: PRECEDENCE.ASSIGNMENT,
+    associativity: "right",
+    type: "infix",
+  },
   ":->": {
     precedence: PRECEDENCE.ASSIGNMENT,
     associativity: "right",
@@ -823,6 +828,11 @@ class Parser {
           return this.createNode("NULL", {
             original: token.original,
           });
+        } else if (token.value === "$$") {
+          this.advance();
+          return this.createNode("ParentSelfRef", {
+            original: token.original,
+          });
         } else if (token.value === "$") {
           this.advance();
           return this.createNode("SelfRef", {
@@ -904,43 +914,47 @@ class Parser {
 
     if (operator.value === "?-" || operator.value === "?!-") {
       this.advance(); // consume ?- / ?!-
-      const prep = this.parseExpression(PRECEDENCE.ARROW + 1);
+      const prep = this.current.value === "["
+        ? this.parseArray()
+        : this.parseExpression(PRECEDENCE.ARROW + 1);
       if (!prep || prep.type !== "Array") {
         this.error("Function prep phase must be written as an array literal: ?- [ ... ]");
       }
-      if (this.current.value !== "->") {
-        this.error("Expected '->' after function prep phase");
+      let variantName = null;
+      if (this.current.value === "/") {
+        variantName = this.parseFunctionVariantHeader();
       }
-      this.advance(); // consume ->
+      if (!["->", "=>", "^=>"].includes(this.current.value)) {
+        this.error("Expected '->', '=>', or '^=>' after function prep phase");
+      }
+      const arrow = this.current.value;
+      this.advance(); // consume arrow
       const body = this.parseExpression(PRECEDENCE.ARROW);
       const prepStrict = operator.value === "?!-";
-
-      const namedSig = this.extractNamedFunctionSignature(left);
-      if (namedSig) {
-        return this.createNode("FunctionDefinition", {
-          name: namedSig.funcName,
-          parameters: namedSig.parameters,
-          prep,
-          prepStrict,
-          body,
-          pos: left.pos,
-          original: left.original + operator.original,
-        });
+      const fnNode = this.buildFunctionArrowNode(left, arrow, body, {
+        prep,
+        prepStrict,
+        variantName,
+      });
+      if (fnNode) {
+        return fnNode;
       }
-
-      const lambdaParameters = this.extractLambdaParameters(left);
-      if (lambdaParameters) {
-        return this.createNode("FunctionLambda", {
-          parameters: lambdaParameters,
-          prep,
-          prepStrict,
-          body,
-          pos: left.pos,
-          original: left.original + operator.original,
-        });
-      }
-
       this.error("Prep phase can only be attached to a function definition or lambda");
+    }
+
+    if (operator.value === "/" && this.looksLikeFunctionVariantHeader() && this.canHaveFunctionVariantHeader(left)) {
+      const variantName = this.parseFunctionVariantHeader();
+      if (!["->", "=>", "^=>"].includes(this.current.value)) {
+        this.error("Expected '->', '=>', or '^=>' after function variant name");
+      }
+      const arrow = this.current.value;
+      this.advance();
+      const body = this.parseExpression(PRECEDENCE.ARROW);
+      const fnNode = this.buildFunctionArrowNode(left, arrow, body, { variantName });
+      if (fnNode) {
+        return fnNode;
+      }
+      this.error("Variant names can only be attached to a function definition or lambda");
     }
 
     this.advance();
@@ -980,28 +994,16 @@ class Parser {
         pos: left.pos,
         original: left.original + operator.original,
       });
-    } else if (operator.value === ":->") {
-      // Standard function definition
+    } else if (operator.value === ":->" || operator.value === "->" || operator.value === "=>"
+      || operator.value === "^=>") {
       right = this.parseExpression(rightPrec);
-
-      // Extract parameters if left side is a function call syntax
-      let funcName = left;
-      let parameters = { positional: [], keyword: [], conditionals: [], metadata: {} };
-      const namedSig = this.extractNamedFunctionSignature(left);
-      if (namedSig) {
-        funcName = namedSig.funcName;
-        parameters = namedSig.parameters;
+      const fnNode = this.buildFunctionArrowNode(left, operator.value, right);
+      if (fnNode) {
+        return fnNode;
       }
-
-      return this.createNode("FunctionDefinition", {
-        name: funcName,
-        parameters: parameters,
-        prep: null,
-        prepStrict: false,
-        body: right,
-        pos: left.pos,
-        original: left.original + operator.original,
-      });
+      if (operator.value === "=>" || operator.value === "^=>") {
+        this.error("Append/prepend syntax requires a named function signature like F(x) => body");
+      }
     } else if (operator.value === ":=>") {
       // Pattern matching function definition
       right = this.parseExpression(rightPrec);
@@ -4112,6 +4114,92 @@ class Parser {
         }
       }
       return { funcName, parameters };
+    }
+
+    return null;
+  }
+
+  canHaveFunctionVariantHeader(left) {
+    return Boolean(this.extractNamedFunctionSignature(left) || this.extractLambdaParameters(left));
+  }
+
+  looksLikeFunctionVariantHeader() {
+    const t1 = this.tokens[this.position - 1];
+    const t2 = this.tokens[this.position];
+    const t3 = this.tokens[this.position + 1];
+    const t4 = this.tokens[this.position + 2];
+    return t1?.value === "/" &&
+      t2?.type === "Identifier" &&
+      t3?.value === "/" &&
+      ["->", "=>", "^=>"].includes(t4?.value);
+  }
+
+  parseFunctionVariantHeader() {
+    if (this.current.value !== "/") {
+      return null;
+    }
+
+    this.advance(); // consume opening /
+    if (this.current.type !== "Identifier") {
+      this.error("Expected variant name inside /.../");
+    }
+    const name = this.current.original.trim();
+    if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(name)) {
+      this.error("Variant names must start with a letter and contain only letters, digits, or underscores");
+    }
+    this.advance();
+    if (this.current.value !== "/") {
+      this.error("Unterminated variant name header");
+    }
+    this.advance();
+    return name;
+  }
+
+  buildFunctionArrowNode(left, operator, body, options = {}) {
+    const { prep = null, prepStrict = false, variantName = null } = options;
+    const namedSig = this.extractNamedFunctionSignature(left);
+
+    if (operator === "=>" || operator === "^=>") {
+      if (!namedSig) {
+        return null;
+      }
+      return this.createNode("FunctionVariantDefinition", {
+        name: namedSig.funcName,
+        parameters: namedSig.parameters,
+        prep,
+        prepStrict,
+        ...(variantName ? { variantName } : {}),
+        mode: operator === "^=>" ? "prepend" : "append",
+        body,
+        pos: left.pos,
+        original: left.original,
+      });
+    }
+
+    if (namedSig) {
+      return this.createNode("FunctionDefinition", {
+        name: namedSig.funcName,
+        parameters: namedSig.parameters,
+        prep,
+        prepStrict,
+        ...(variantName ? { variantName } : {}),
+        body,
+        pos: left.pos,
+        original: left.original,
+      });
+    }
+
+    const lambdaParameters = this.extractLambdaParameters(left);
+    if (lambdaParameters) {
+      return this.createNode("FunctionLambda", {
+        parameters: lambdaParameters,
+        prep,
+        prepStrict,
+        ...(variantName ? { variantName } : {}),
+        body,
+        pos: left.pos,
+        original: left.original,
+      });
     }
 
     return null;

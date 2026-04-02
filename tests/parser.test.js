@@ -533,6 +533,59 @@ describe("RiX Parser", () => {
         },
       ]);
     });
+
+    test("named function variant parses with name header", () => {
+      const ast = parseCode("(x) /Rational/ -> x;");
+      expect(stripMetadata(ast)).toEqual([
+        {
+          type: "Statement",
+          expression: {
+            type: "FunctionLambda",
+            parameters: {
+              positional: [{ name: "x", defaultValue: null }],
+              keyword: [],
+              conditionals: [],
+              metadata: {},
+            },
+            variantName: "Rational",
+            body: { type: "UserIdentifier", name: "x" },
+          },
+        },
+      ]);
+    });
+
+    test("append variant parses as multifunction definition", () => {
+      const ast = parseCode("F(x) ?- [x > 0] /Positive/ => x;");
+      expect(stripMetadata(ast)).toEqual([
+        {
+          type: "Statement",
+          expression: {
+            type: "FunctionVariantDefinition",
+            name: { type: "SystemIdentifier", name: "F", systemInfo: { type: "identifier" } },
+            parameters: {
+              positional: [{ name: "x", defaultValue: null }],
+              keyword: [],
+              conditionals: [],
+              metadata: {},
+            },
+            prep: {
+              type: "Array",
+              elements: [
+                {
+                  type: "BinaryOperation",
+                  operator: ">",
+                  left: { type: "UserIdentifier", name: "x" },
+                  right: { type: "Number", value: "0" },
+                },
+              ],
+            },
+            variantName: "Positive",
+            mode: "append",
+            body: { type: "UserIdentifier", name: "x" },
+          },
+        },
+      ]);
+    });
   });
 
   describe("Basic arithmetic", () => {
