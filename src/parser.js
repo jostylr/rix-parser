@@ -781,7 +781,7 @@ class Parser {
 
           // Feature: @+ directly references ADD system function, @* to MUL, etc.
           const operatorToSystem = {
-            "+": "ADD", "-": "SUB", "*": "MUL", "/": "DIV", "//": "INTDIV", "%": "MOD", "^": "POW",
+            "+": "ADD", "-": "SUB", "*": "MUL", "/": "DIV", "//": "INTDIV", "%": "MOD", "^": "POW", "**": "POWPROD",
             "=": "EQ", "!=": "NEQ", "<": "LT", ">": "GT", "<=": "LTE", ">=": "GTE",
             "&&": "AND", "||": "OR", "!": "NOT"
           };

@@ -41,8 +41,8 @@ Arithmetic and Assignment:
 	•	:= : Assignment (infix, right-associative)
 	•	:  : Interval (infix, binds numbers to intervals)
 	•	.. : Mixed number separator (e.g., 1..3/4)
-	•	^  : Exponentiation (infix, right-associative)
-	•	** : Minkowski/interval exponentiation (infix)
+	•	^  : Exponentiation (infix, right-associative; lowers to `POW`)
+	•	** : Distinct power-product operator (infix; lowers to `POWPROD`)
 
 Comparison and Boolean:
 	•	=   : Identity/assertion (infix)

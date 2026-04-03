@@ -56,12 +56,12 @@ The language features rich support for intervals, rationals, mixed numbers, patt
 | Repeating Dec | `0.#3`     | 1/3                         |
 | Interval      | `2:5`      | \[2,5] (closed)             |
 | Mixed Number  | `1..3/4`   | 1 + 3/4 = 1.75              |
-| Interval Exp  | `2:3 ^ 2`  | \[4, 9] (elementwise power) |
-| Minkowski Pow | `2:3 ** 2` | \[4, 9] (interval product)  |
+| Interval Exp  | `2:3 ^ 2`  | \[4, 9] (lowers to `POW`) |
+| Power Product | `2:3 ** 2` | \[4, 9] (lowers to `POWPROD`) |
 
 * `a:b` denotes a closed interval from a to b.
-* `^` applies elementwise on interval endpoints.
-* `**` is interval/Minkowski product.
+* `^` and `**` are distinct syntax operators and lower to different runtime names: `POW` and `POWPROD`.
+* `POWPROD` currently shares the same evaluator implementation as `POW`, but is split out so dispatch can diverge later.
 * Decimal notation without `#` is interpreted as an exact number in intervals: `1.23:1.34` = `1.23#0:1.34#0`.
 * Repeating decimals: `0.#3` is 1/3, `1.23#56` is 1.235656…
 
