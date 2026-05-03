@@ -1316,6 +1316,9 @@ class Parser {
     } else if (operator.value === ":~") {
       // Interval mediants
       right = this.parseExpression(rightPrec);
+      if (right?.type === "String" && right.kind === "colon") {
+        this.error("':~' is the interval mediants operator. For semantic conversion, use '~:' as in 'x ~: :Type'.");
+      }
       return this.createNode("IntervalMediants", {
         interval: left,
         levels: right,
@@ -1325,6 +1328,9 @@ class Parser {
     } else if (operator.value === ":~/") {
       // Interval mediant partition
       right = this.parseExpression(rightPrec);
+      if (right?.type === "String" && right.kind === "colon") {
+        this.error("':~/' is the interval mediant partition operator. For semantic conversion, use '~:' as in 'x ~: :Type'.");
+      }
       return this.createNode("IntervalMediantPartition", {
         interval: left,
         levels: right,

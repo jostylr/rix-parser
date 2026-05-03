@@ -3829,6 +3829,11 @@ describe("RiX Parser", () => {
             }
           }]);
         });
+
+        test('colon semantic type after mediant operator points to ~: conversion', () => {
+          expect(() => parseCode('7 :~ :Float;')).toThrow("For semantic conversion, use '~:'");
+          expect(() => parseCode('7 :~/ :Float;')).toThrow("For semantic conversion, use '~:'");
+        });
       });
 
       describe('Random Selection and Partitioning', () => {
