@@ -630,6 +630,36 @@ class Parser {
     return this.parseExpressionRec(left, minPrec, false);
   }
 
+  parseCommaSequenceExpression(minPrec = 0) {
+    const expressions = [this.parseExpression(minPrec)];
+
+    while (this.current.value === ",") {
+      this.advance();
+      if (
+        this.current.value === ";" ||
+        this.current.value === "}" ||
+        this.current.type === "SemicolonSequence" ||
+        this.current.type === "End"
+      ) {
+        break;
+      }
+      expressions.push(this.parseExpression(minPrec));
+    }
+
+    if (expressions.length === 1) {
+      return expressions[0];
+    }
+
+    const first = expressions[0];
+    const last = expressions[expressions.length - 1];
+    return this.createNode("SequenceExpression", {
+      expressions,
+      pos: first.pos,
+      original: expressions.map((expr) => expr.original || "").join(","),
+      end: last.pos?.[2],
+    });
+  }
+
   // Parse prefix expressions (literals, unary operators, grouping)
   parsePrefix() {
     const token = this.current;
@@ -2789,7 +2819,9 @@ class Parser {
         ? () => this.parseMapConstructorEntry()
         : effectiveSigil === "{|" || effectiveSigil === "{:" || effectiveSigil === "{.."
           ? () => this.parseCapturedConstructorElement()
-          : () => this.parseExpression(0);
+          : isTemporal
+            ? () => this.parseCommaSequenceExpression(0)
+            : () => this.parseExpression(0);
 
     if (!isCloser(this.current.value)) {
       do {
