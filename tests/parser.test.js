@@ -1383,6 +1383,15 @@ describe("RiX Parser", () => {
       ]);
     });
 
+    test("block import header normalizes identifier casing", () => {
+      const expr = stripMetadata(parseCode("{@ < maxIter, LocalName=OuterName > i = 0; i < maxIter; i; i += 1 };"))[0].expression;
+      expect(expr.type).toBe("LoopContainer");
+      expect(expr.imports).toEqual([
+        { local: "maxiter", source: "maxiter", mode: "copy" },
+        { local: "LOCALNAME", source: "OUTERNAME", mode: "alias" },
+      ]);
+    });
+
     test("empty import header is rejected", () => {
       expect(() => parseCode("{; <> a };")).toThrow("Import header cannot be empty");
     });
@@ -1405,6 +1414,7 @@ describe("RiX Parser", () => {
 
     test("duplicate local targets in import header are rejected", () => {
       expect(() => parseCode("{; <a~x, a=y> a };")).toThrow("Duplicate import target 'a'");
+      expect(() => parseCode("{; <maxIter, maxiter> a };")).toThrow("Duplicate import target 'maxiter'");
     });
   });
 

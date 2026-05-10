@@ -2800,6 +2800,26 @@ class Parser {
     const primaryCloser = closers[0];
     const isCloser = (val) => closers.includes(val);
     const separator = isTemporal ? ";" : ",";
+    const isSeparatorToken = () => (
+      isTemporal
+        ? this.current.value === ";" || this.current.type === "SemicolonSequence"
+        : this.current.value === separator
+    );
+    const consumeSeparatorToken = () => {
+      if (isTemporal && this.current.type === "SemicolonSequence") {
+        const count = this.current.count;
+        this.advance();
+        return count;
+      }
+      if (this.current.value === separator) {
+        this.advance();
+        return 1;
+      }
+      return 0;
+    };
+    const pushHoleSlot = () => {
+      elements.push(this.createNode("Hole", { original: "" }));
+    };
 
     const header =
       effectiveSigil === "{=" ||
@@ -2826,8 +2846,11 @@ class Parser {
     if (!isCloser(this.current.value)) {
       do {
         // Handle leading separators (empty slots)
-        if (this.current.value === separator) {
-          this.advance();
+        if (isSeparatorToken()) {
+          const count = consumeSeparatorToken();
+          if (effectiveSigil === "{@") {
+            for (let i = 0; i < count; i++) pushHoleSlot();
+          }
           continue;
         }
 
@@ -2857,8 +2880,15 @@ class Parser {
         elements.push(element);
 
         // Check for separator
-        if (this.current.value === separator) {
-          this.advance();
+        if (isSeparatorToken()) {
+          const count = consumeSeparatorToken();
+          if (effectiveSigil === "{@") {
+            if (isCloser(this.current.value)) {
+              for (let i = 0; i < count; i++) pushHoleSlot();
+            } else {
+              for (let i = 1; i < count; i++) pushHoleSlot();
+            }
+          }
           // Allow trailing separator before closer
           if (isCloser(this.current.value)) {
             break;
@@ -3314,6 +3344,18 @@ class Parser {
     return this.current.value === "<" || this.current.value === "<>";
   }
 
+  normalizeImportIdentifierName(name) {
+    let firstLetter = null;
+    for (let i = 0; i < name.length; i++) {
+      if (/[\p{L}]/u.test(name[i])) {
+        firstLetter = name[i];
+        break;
+      }
+    }
+    const isCapital = firstLetter !== null && firstLetter.toUpperCase() === firstLetter;
+    return isCapital ? name.toUpperCase() : name.toLowerCase();
+  }
+
   parseImportHeader() {
     const startIndex = this.position - 1;
     let raw = "";
@@ -3361,7 +3403,11 @@ class Parser {
         this.error("Malformed import header");
       }
 
-      const [, local, operator, explicitSource] = match;
+      const [, rawLocal, operator, rawExplicitSource] = match;
+      const local = this.normalizeImportIdentifierName(rawLocal);
+      const explicitSource = rawExplicitSource
+        ? this.normalizeImportIdentifierName(rawExplicitSource)
+        : undefined;
       const mode = operator === "=" ? "alias" : "copy";
       const source = explicitSource || local;
 

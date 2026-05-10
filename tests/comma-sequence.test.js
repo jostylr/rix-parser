@@ -27,6 +27,24 @@ describe("comma sequence expressions", () => {
     expect(loop.elements[3].operator).toBe("+=");
   });
 
+  test("loop preserves empty semicolon slots as holes", () => {
+    const [loop] = parseCode("{@ i = 0; i < 5; ; i += 1; i^2}");
+
+    expect(loop.type).toBe("LoopContainer");
+    expect(loop.elements).toHaveLength(5);
+    expect(loop.elements[2].type).toBe("Hole");
+    expect(loop.elements[3].operator).toBe("+=");
+  });
+
+  test("loop preserves compact consecutive semicolon slots as holes", () => {
+    const [loop] = parseCode("{@ i = 0; i < 5;; i += 1; i^2}");
+
+    expect(loop.type).toBe("LoopContainer");
+    expect(loop.elements).toHaveLength(5);
+    expect(loop.elements[2].type).toBe("Hole");
+    expect(loop.elements[3].operator).toBe("+=");
+  });
+
   test("explicit temporal blocks parse comma sequences as one expression", () => {
     const [block] = parseCode("{; i = 1, j = 3; i + j}");
 
