@@ -1,3 +1,5 @@
+This has been moved into [RiX](https://github.com/jostylr/rix). Archiving for history. 
+
 # ![RiX Logo](./rix-logo.png)
 **RiX Language Parser & Tokenizer**
 
